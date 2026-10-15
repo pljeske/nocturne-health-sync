@@ -77,6 +77,8 @@ public struct HTTPNocturneClient: NocturneClient {
       throw .cancelled
     } catch let error as URLError where error.code == .cancelled {
       throw .cancelled
+    } catch let error as AuthError {
+      throw .auth(error)
     } catch {
       throw .transport(error)
     }

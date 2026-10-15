@@ -7,3 +7,4 @@ contract in `CLAUDE.md`.
 | --- | --- | --- | --- | --- |
 | 2026-10-15 | v0.2.3 (contract read from `main`) | – | reading the source only | No integration run yet. |
 | 2026-10-15 | v0.2.7 (contract read from `main`) | 806cb31 | reading the source only | Step 2 client: request models, 1000-record limit, empty array → 400, 503 setup-gate body re-checked against `V4BulkValidation.cs` and `TenantSetupMiddleware.cs`. No integration run yet. |
+| 2026-10-15 | v0.2.7 (contract read from `main`) | 806cb31 | reading the source only | Step 3 auth: `OAuthController` (register/authorize/token/revoke), `PkceValidator`, `OAuthTokenService` refresh rotation and `invalid_grant` cases. No integration run yet. |

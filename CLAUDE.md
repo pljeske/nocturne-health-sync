@@ -77,8 +77,9 @@ App (SwiftUI, settings, auth UI)
      └─ Stores                AnchorStore (file), TokenStore (Keychain), SyncStateStore (file)
 ```
 
-`SyncStateStore` holds the step backfill watermark, per-type status (`lastSuccessfulSync`,
-`lastError`, counts), and the cached OAuth `client_id` per base URL. Only `SyncEngine` writes it.
+`SyncStateStore` holds the step backfill watermark and per-type status (`lastSuccessfulSync`,
+`lastError`, counts). Only `SyncEngine` writes it. `TokenStore` holds the `TokenSet` and the cached
+OAuth `client_id` per base URL; only `AuthSession` writes it (sign-in happens before any engine runs).
 
 - One `SyncEngine` actor is the only writer of anchors and the only caller of the upload client.
   Background delivery callbacks, BG tasks, and manual "Sync now" all funnel into it.
@@ -180,6 +181,11 @@ client, and record the Nocturne version tested against in `docs/compat.md`.
   Use the bundle id as the scheme.
 - Scopes: `heartrate.readwrite stepcount.readwrite`. Request nothing broader. PKCE is mandatory,
   `S256` only.
+- Wire shapes (`OAuthController`): `register` takes JSON (`client_name`, `redirect_uris`, `scope`,
+  `software_id`, `software_version`) and returns `client_id`; `token` and `revoke` take
+  `application/x-www-form-urlencoded`; `token` returns `access_token`, `expires_in`,
+  `refresh_token`, `scope`. OAuth errors are 400 `{ "error", "error_description" }`, not Problem
+  Details. The callback carries `code`/`state` or `error`/`error_description`, percent-encoded.
 - Refresh tokens rotate, and replaying an old one revokes the whole grant. Token refresh must be
   single-flight: one actor owns the token, concurrent callers await the same refresh task, and
   the new refresh token is persisted to Keychain before the access token is used.

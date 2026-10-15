@@ -32,12 +32,16 @@ public enum NocturneClientError: Error, Sendable {
   case encoding(any Error)
   /// The surrounding task was cancelled before or during the request. Not an error to record.
   case cancelled
+  /// The auth layer could not supply a bearer token (see `AuthError`). `.auth(.signedOut)` means stop
+  /// syncing until the user signs in again.
+  case auth(AuthError)
 
   /// Whether a later identical attempt may succeed without any change on the client. The retry policy
   /// retries exactly these.
   public var isTransient: Bool {
     switch self {
     case .rateLimited, .server, .transport: true
+    case .auth(let error): error.isTransient
     case .badRequest, .unauthorized, .forbidden, .setupRequired, .recoveryModeActive, .unexpectedStatus, .encoding,
       .cancelled:
       false
