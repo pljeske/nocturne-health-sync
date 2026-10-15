@@ -101,8 +101,8 @@ App (SwiftUI, settings, auth UI)
 - One sample → one Nocturne record. `bpm` = sample value in count/min, rounded to Int.
 - `syncIdentifier` = `sample.uuid.uuidString`.
 - Advance the anchor only after every batch derived from that query result got a 2xx.
-- Watch workouts produce dense samples (seconds apart). Upload raw; do not downsample unless the
-  user decides otherwise.
+- Watch workouts produce dense samples (seconds apart). Upload raw, no downsampling (decided).
+  Expect bursts of thousands of samples per workout; the query limit and chunking above handle it.
 
 ### Steps (the part most likely to be gotten wrong)
 
@@ -213,10 +213,10 @@ Decided 2026-10-15:
 
 1. Step bucket size 5 min, lookback window 24 h. The bucket size is permanent (see Steps).
 2. Backfill window 90 days.
+3. Heart rate: raw upload, no downsampling during workouts.
 
 ## Open decisions (ask before implementing)
 
-3. Heart rate: raw upload vs. downsampling during workouts.
 4. Hand-rolled client vs. `nocturne-swift` SDK. Review 2026-10-15: the SDK is OpenAPI Generator
    output (API version 0.0.1, README still documents Carthage/CocoaPods), covers both endpoints,
    does nothing for PKCE or refresh. Recommendation: hand-roll.
