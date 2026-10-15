@@ -103,8 +103,10 @@ OAuth `client_id` per base URL; only `AuthSession` writes it (sign-in happens be
   `HKError.errorDatabaseInaccessible` as "retry later": do not advance anchors, do not surface
   an error.
 - Persist state so it is readable after first unlock in the background:
-  anchors with file protection `.completeUntilFirstUserAuthentication`, Keychain items with
-  `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`.
+  anchors and sync state with file protection `.completeUntilFirstUserAuthentication`, Keychain
+  items with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`. The store directory is excluded
+  from backups: anchors are opaque handles into one device's HealthKit store, and the rest is
+  rebuilt by a single sync.
 
 ### Heart rate
 
