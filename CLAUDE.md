@@ -4,8 +4,8 @@ iOS app that reads heart rate and step data from Apple Health (HealthKit) and up
 self-hosted Nocturne instance (https://github.com/nightscout/nocturne). Single user, personal use,
 read-only on the HealthKit side. Working name: `NocturneSync` (rename freely).
 
-Status: greenfield. No code exists yet. Before the first implementation step, confirm the
-"Open decisions" section with the user rather than picking silently.
+Status: greenfield. No code exists yet. All design decisions are recorded in the "Decisions"
+section; anything not covered there is a new decision and must be asked, not picked silently.
 
 ## Scope
 
@@ -148,13 +148,13 @@ client, and record the Nocturne version tested against in `docs/compat.md`.
   doing so duplicates all history.
 - `utcOffset`: from `HKMetadataKeyTimeZone` when present, else the device time zone at the
   sample's timestamp (DST-correct via `TimeZone.secondsFromGMT(for:)`).
-- Hand-roll a thin `URLSession` client for these two endpoints plus OAuth. The official
-  generated SDK (`nightscout/nocturne-swift`) is a reference for model shapes, not a dependency,
-  unless the user decides otherwise.
+- Hand-roll a thin `URLSession` client for these two endpoints plus OAuth (decided). The
+  generated SDK (`nightscout/nocturne-swift`) is a reference for model shapes, not a dependency.
 
 ### Auth
 
-- OAuth 2.0 Authorization Code + PKCE via `ASWebAuthenticationSession`. Public client, no secret.
+- OAuth 2.0 Authorization Code + PKCE via `ASWebAuthenticationSession` (decided; not the device
+  flow). Public client, no secret.
 - Dynamic client registration: `POST /api/oauth/register` with a fixed `software_id`
   (bundle id) and the app's redirect URI. Idempotent per `(tenant, software_id)`. Registration
   is rate-limited to 10 per hour per IP, so caching `client_id` per base URL is mandatory and
@@ -214,12 +214,11 @@ Decided 2026-10-15:
 1. Step bucket size 5 min, lookback window 24 h. The bucket size is permanent (see Steps).
 2. Backfill window 90 days.
 3. Heart rate: raw upload, no downsampling during workouts.
+4. Hand-rolled `URLSession` client, not the `nocturne-swift` SDK. The SDK is OpenAPI Generator
+   output (API version 0.0.1, README still documents Carthage/CocoaPods) and does nothing for
+   PKCE or refresh.
+5. Auth flow: Authorization Code + PKCE via `ASWebAuthenticationSession`. Nocturne's device flow
+   (`/api/oauth/device`) targets input-constrained devices and is not used.
+6. Minimum iOS version 18.
 
-## Open decisions (ask before implementing)
-
-4. Hand-rolled client vs. `nocturne-swift` SDK. Review 2026-10-15: the SDK is OpenAPI Generator
-   output (API version 0.0.1, README still documents Carthage/CocoaPods), covers both endpoints,
-   does nothing for PKCE or refresh. Recommendation: hand-roll.
-5. Auth flow: PKCE via `ASWebAuthenticationSession` vs. Nocturne's device flow
-   (`/api/oauth/device`). The device flow targets input-constrained devices. Recommendation: PKCE.
-6. Minimum iOS version (18 proposed). Nothing in the stack needs more than 17.
+No decisions are currently open.
