@@ -1,0 +1,91 @@
+# XcodeGen spec. Never hand-edit the generated .xcodeproj; edit this file and run
+# `xcodegen generate`. Everything that does not touch HealthKit, Keychain, or SwiftUI lives in the
+# NocturneSyncCore SwiftPM package (Package.swift) so it can be built and tested without Xcode.
+name: NocturneSync
+
+options:
+  bundleIdPrefix: com.pljeske
+  deploymentTarget:
+    iOS: "18.0"
+  xcodeVersion: "16.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+packages:
+  NocturneSyncCore:
+    path: .
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    # Set DEVELOPMENT_TEAM in the environment before `xcodegen generate` for device builds.
+    # Simulator builds work without a team.
+    DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM}
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  NocturneSync:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources/NocturneSync
+        excludes:
+          - Info.plist
+          - NocturneSync.entitlements
+    dependencies:
+      - package: NocturneSyncCore
+        product: NocturneSyncCore
+      - sdk: HealthKit.framework
+      - sdk: BackgroundTasks.framework
+      - sdk: AuthenticationServices.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pljeske.NocturneSync
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+    info:
+      path: Sources/NocturneSync/Info.plist
+      properties:
+        CFBundleDisplayName: NocturneSync
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        # Read-only HealthKit access. Deliberately no NSHealthUpdateUsageDescription.
+        NSHealthShareUsageDescription: >-
+          NocturneSync reads your heart rate and step count to upload them to your own Nocturne
+          instance. Nothing is written to Health.
+        UIBackgroundModes:
+          - fetch
+          - processing
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.pljeske.NocturneSync.refresh
+        # OAuth redirect: the URL scheme is the bundle id (reverse-DNS, contains a dot, as
+        # Nocturne's dynamic client registration requires).
+        CFBundleURLTypes:
+          - CFBundleURLName: com.pljeske.NocturneSync
+            CFBundleURLSchemes:
+              - com.pljeske.NocturneSync
+    entitlements:
+      path: Sources/NocturneSync/NocturneSync.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
+        com.apple.developer.healthkit.background-delivery: true
+
+schemes:
+  NocturneSync:
+    build:
+      targets:
+        NocturneSync: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - package: NocturneSyncCore/NocturneSyncCoreTests
