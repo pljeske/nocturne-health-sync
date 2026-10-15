@@ -43,13 +43,25 @@ Out of scope (do not add without asking):
 
 ## Commands
 
+Core package (`NocturneSyncCore`, Foundation only; works on macOS and Linux, including Claude Code
+cloud sessions, where `.claude/hooks/session-start.sh` installs a Swift 6 toolchain to `/opt/swift`):
+
+```sh
+swift build
+swift test
+swift format lint --strict --recursive Sources Tests Package.swift
+swift format --in-place --recursive Sources Tests Package.swift
+```
+
+App target (Mac with Xcode 16+ only; `xcodegen generate` first, the project is not committed):
+
 ```sh
 xcodegen generate
 xcodebuild -scheme NocturneSync -destination 'platform=iOS Simulator,name=iPhone 16' build
 xcodebuild -scheme NocturneSync -destination 'platform=iOS Simulator,name=iPhone 16' test
-swift format --in-place --recursive Sources Tests
 ```
 
+Set `DEVELOPMENT_TEAM` in the environment before `xcodegen generate` for device builds.
 Update this section when targets or schemes change.
 
 ## Architecture
