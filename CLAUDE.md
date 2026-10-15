@@ -148,6 +148,9 @@ client, and record the Nocturne version tested against in `docs/compat.md`.
   chunk. Success is 200 with the written records; treat any 2xx as success.
 - Errors are RFC 7807 Problem Details (`title`, `detail`, `status`). Show `detail` on the status
   screen.
+- The setup gate answers 503 outside Problem Details: `{ "error": "setup_required" |
+  "recovery_mode_active", "message", "setupRequired", "recoveryMode" }` (`TenantSetupMiddleware`).
+  Any other 503 is an ordinary server error.
 - Heart rate request fields: `timestamp` (ISO 8601 with offset), `utcOffset` (minutes),
   `bpm` (int), `accuracy` (int, send 0 unless a real value exists), `device`, `app`,
   `dataSource`, `syncIdentifier`. The server stores `timestamp` as UTC and discards the offset;
