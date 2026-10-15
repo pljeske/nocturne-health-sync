@@ -4,8 +4,9 @@ iOS app that reads heart rate and step data from Apple Health (HealthKit) and up
 self-hosted Nocturne instance (https://github.com/nightscout/nocturne). Single user, personal use,
 read-only on the HealthKit side. Working name: `NocturneSync` (rename freely).
 
-Status: greenfield. No code exists yet. All design decisions are recorded in the "Decisions"
-section; anything not covered there is a new decision and must be asked, not picked silently.
+Status: in progress, following `docs/plan.md` step by step. All design decisions are recorded in
+the "Decisions" section; anything not covered there is a new decision and must be asked, not
+picked silently.
 
 ## Scope
 
@@ -43,13 +44,25 @@ Out of scope (do not add without asking):
 
 ## Commands
 
+Core package (`NocturneSyncCore`, Foundation only; works on macOS and Linux, including Claude Code
+cloud sessions, where `.claude/hooks/session-start.sh` installs a Swift 6 toolchain to `/opt/swift`):
+
+```sh
+swift build
+swift test
+swift format lint --strict --recursive Sources Tests Package.swift
+swift format --in-place --recursive Sources Tests Package.swift
+```
+
+App target (Mac with Xcode 16+ only; `xcodegen generate` first, the project is not committed):
+
 ```sh
 xcodegen generate
 xcodebuild -scheme NocturneSync -destination 'platform=iOS Simulator,name=iPhone 16' build
 xcodebuild -scheme NocturneSync -destination 'platform=iOS Simulator,name=iPhone 16' test
-swift format --in-place --recursive Sources Tests
 ```
 
+Set `DEVELOPMENT_TEAM` in the environment before `xcodegen generate` for device builds.
 Update this section when targets or schemes change.
 
 ## Architecture
