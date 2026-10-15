@@ -4,8 +4,9 @@ iOS app that reads heart rate and step data from Apple Health (HealthKit) and up
 self-hosted Nocturne instance (https://github.com/nightscout/nocturne). Single user, personal use,
 read-only on the HealthKit side. Working name: `NocturneSync` (rename freely).
 
-Status: greenfield. No code exists yet. All design decisions are recorded in the "Decisions"
-section; anything not covered there is a new decision and must be asked, not picked silently.
+Status: in progress, following `docs/plan.md` step by step. All design decisions are recorded in
+the "Decisions" section; anything not covered there is a new decision and must be asked, not
+picked silently.
 
 ## Scope
 
