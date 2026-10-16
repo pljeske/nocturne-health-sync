@@ -38,6 +38,8 @@ targets:
     dependencies:
       - package: NocturneSyncCore
         product: NocturneSyncCore
+      - package: NocturneSyncCore
+        product: NocturneSyncFeatures
       - sdk: HealthKit.framework
       - sdk: BackgroundTasks.framework
       - sdk: AuthenticationServices.framework
@@ -60,9 +62,13 @@ targets:
         NSHealthShareUsageDescription: >-
           NocturneSync reads your heart rate and step count to upload them to your own Nocturne
           instance. Nothing is written to Health.
+        # fetch: BGAppRefreshTask. HealthKit background delivery needs only its entitlement.
         UIBackgroundModes:
           - fetch
-          - processing
+        # Lets a development build reach a Nocturne on http://localhost (simulator). Production
+        # instances must be https; the app rejects plain http to anything but loopback.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
         BGTaskSchedulerPermittedIdentifiers:
           - com.pljeske.NocturneSync.refresh
         # OAuth redirect: the URL scheme is the bundle id (reverse-DNS, contains a dot, as
@@ -89,3 +95,4 @@ schemes:
       config: Debug
       targets:
         - package: NocturneSyncCore/NocturneSyncCoreTests
+        - package: NocturneSyncCore/NocturneSyncFeaturesTests

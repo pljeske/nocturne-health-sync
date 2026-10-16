@@ -44,8 +44,9 @@ Out of scope (do not add without asking):
 
 ## Commands
 
-Core package (`NocturneSyncCore`, Foundation only; works on macOS and Linux, including Claude Code
-cloud sessions, where `.claude/hooks/session-start.sh` installs a Swift 6 toolchain to `/opt/swift`):
+Swift package (`NocturneSyncCore` and `NocturneSyncFeatures`, Foundation + Observation only; works on
+macOS and Linux, including Claude Code cloud sessions, where `.claude/hooks/session-start.sh`
+installs a Swift 6 toolchain to `/opt/swift`):
 
 ```sh
 swift build
@@ -89,6 +90,13 @@ before any engine runs). Anchors and sync state live in a directory per instance
   means adding a pipeline, not touching the engine.
 - `HealthSource` and `NocturneClient` are protocols so the engine is fully testable without
   HealthKit or a network.
+- The app layer's logic lives in the `NocturneSyncFeatures` package target: `AppModel`
+  (`@Observable`, the single entry point for launch, sign-in, Health observers, BG refresh, "Sync
+  now", sign-out), status presentation and instance URL parsing, against small protocols
+  (`AuthService`, `SyncService`, `WebAuthenticating`, `BackgroundScheduling`, `SettingsStore`).
+  The iOS target (`Sources/NocturneSync`) holds only Apple-framework glue: `HealthKitSource`,
+  `KeychainTokenStore`, BGTaskScheduler, the `ASWebAuthenticationSession` adapter, SwiftUI views,
+  and `LiveEnvironment`, the composition root. Keep new logic out of the iOS target.
 
 ## HealthKit rules
 

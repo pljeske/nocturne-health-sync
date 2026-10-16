@@ -169,6 +169,9 @@ docs/compat.md                      Nocturne version tested against
 
 ### 8. Scheduling and launch wiring (`App/`)
 
+Implemented as `AppModel` in the `NocturneSyncFeatures` package target (tested on Linux against
+fakes) plus thin glue in the iOS target (`AppDelegate`, `BackgroundRefresh`, `LiveEnvironment`).
+
 - On every launch: request authorization if not yet requested, `enableBackgroundDelivery` for
   both types (`.immediate` for heart rate, `.hourly` for steps, knowing iOS caps steps anyway),
   register observer queries whose handler calls `engine.sync(reason: .observer)` and always
@@ -179,6 +182,9 @@ docs/compat.md                      Nocturne version tested against
   on the simulator.
 
 ### 9. App UI (`UI/`)
+
+Views in the iOS target bind to `AppModel`; status rows (`DataTypeStatus`), address parsing
+(`InstanceURL`) and user messages are in `NocturneSyncFeatures` and tested there.
 
 - Onboarding: base URL entry with validation, "Sign in" launching `ASWebAuthenticationSession`
   with the PKCE URL from `AuthSession`, callback scheme = bundle id.
