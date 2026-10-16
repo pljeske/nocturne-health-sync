@@ -56,6 +56,9 @@ public struct StepsPipeline: SyncPipeline {
     let lookback = StepWindows.lookback(now: context.now, hours: lookbackHours, bucketSeconds: bucketSeconds)
     _ = try await upload(lookback, context)
 
+    let backfillStart = watermark
+    let backfillSpan = lookback.start.timeIntervalSince(backfillStart)
+    var progress = SyncProgress(type: .stepCount)
     while let slice = StepWindows.nextSlice(watermark: watermark, limit: lookback.start, sliceSeconds: sliceSeconds) {
       let uploaded = try await upload(slice, context)
       let end = slice.end
@@ -65,6 +68,10 @@ public struct StepsPipeline: SyncPipeline {
         throw .failed(error)
       }
       watermark = end
+      progress.uploaded += uploaded
+      progress.fractionCompleted = min(1, end.timeIntervalSince(backfillStart) / backfillSpan)
+      progress.reached = end
+      await context.reportProgress(progress)
     }
   }
 

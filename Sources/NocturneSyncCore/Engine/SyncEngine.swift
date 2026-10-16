@@ -31,6 +31,11 @@ public actor SyncEngine {
   private var loadedState: SyncState?
   private var committedThisRun: [HealthDataType: Int] = [:]
 
+  /// Progress of running syncs, for the UI. Single consumer (the app model). Only the newest events
+  /// are buffered, so a missing consumer costs nothing and a slow one sees the latest progress.
+  public nonisolated let events: AsyncStream<SyncEvent>
+  private let eventSink: AsyncStream<SyncEvent>.Continuation
+
   public init(
     health: any HealthSource,
     client: any NocturneClient,
@@ -54,6 +59,11 @@ public actor SyncEngine {
     self.retrier = Retrier(policy: retryPolicy, sleep: sleep, unitRandom: unitRandom)
     self.now = now
     self.timeZone = timeZone
+    (events, eventSink) = AsyncStream.makeStream(of: SyncEvent.self, bufferingPolicy: .bufferingNewest(64))
+  }
+
+  deinit {
+    eventSink.finish()
   }
 
   /// The last loaded or written state, for the status screen. Nil until the first run loads it.
@@ -139,7 +149,9 @@ public actor SyncEngine {
       let context = SyncContext(
         type: type, health: health, client: client, now: startedAt, timeZone: zone, app: app, retrier: retrier,
         engine: self)
+      eventSink.yield(.started(type))
       let result = record(await pipeline.run(context), for: type)
+      eventSink.yield(.finished(type))
       report.results[type] = result
       report.uploaded[type] = committedThisRun[type, default: 0]
       if result.stopsRun { break }
@@ -203,6 +215,10 @@ public actor SyncEngine {
   func currentRunState() -> SyncState {
     guard let loadedState else { preconditionFailure("pipelines run only after the state is loaded") }
     return loadedState
+  }
+
+  func report(_ progress: SyncProgress) {
+    eventSink.yield(.progressed(progress, currentRunState()))
   }
 
   func loadAnchor(for type: HealthDataType) throws(SyncFailure) -> Data? {

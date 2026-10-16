@@ -13,6 +13,8 @@ extension AuthSession: AuthService {}
 
 /// Syncing for one instance. `SyncEngine` is the live implementation.
 public protocol SyncService: Sendable {
+  /// Progress of running syncs; consumed by `AppModel` only.
+  var events: AsyncStream<SyncEvent> { get }
   func sync(reason: SyncReason) async -> SyncReport
   func cancelCurrentRun() async
   func persistedState() async -> SyncState?

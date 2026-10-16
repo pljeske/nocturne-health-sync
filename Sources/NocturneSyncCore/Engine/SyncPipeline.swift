@@ -98,6 +98,12 @@ public struct SyncContext: Sendable {
     try await engine.commit(type, anchor: anchor, uploaded: uploaded, update: update)
   }
 
+  /// Publishes the run's progress for this type, with the current state, on `SyncEngine.events`.
+  /// Call after each commit.
+  public func reportProgress(_ progress: SyncProgress) async {
+    await engine.report(progress)
+  }
+
   /// Writes state that is not tied to a batch (e.g. the heart rate cutoff, before the first query).
   public func update(_ body: @escaping @Sendable (inout SyncState) -> Void) async throws(SyncFailure) {
     try await engine.commit(type, anchor: nil, uploaded: 0, update: body)

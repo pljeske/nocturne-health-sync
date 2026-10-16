@@ -70,12 +70,20 @@ actor FakeAuthService: AuthService {
 }
 
 actor FakeSyncService: SyncService {
+  nonisolated let events: AsyncStream<SyncEvent>
+  private nonisolated let sink: AsyncStream<SyncEvent>.Continuation
   private(set) var reasons: [SyncReason] = []
   private(set) var cancelCount = 0
   var state: SyncState? = SyncState()
   private var reports: [SyncReport] = []
   private var gate: CheckedContinuation<Void, Never>?
   private var holdNext = false
+
+  init() {
+    (events, sink) = AsyncStream.makeStream(of: SyncEvent.self)
+  }
+
+  nonisolated func emit(_ event: SyncEvent) { sink.yield(event) }
 
   func setState(_ state: SyncState?) { self.state = state }
   func enqueue(_ report: SyncReport) { reports.append(report) }

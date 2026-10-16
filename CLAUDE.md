@@ -236,6 +236,10 @@ client, and record the Nocturne version tested against in `docs/compat.md`.
 - Background time is short. A sync run must be cancellable at any batch boundary without
   losing committed progress.
 - Record per-type `lastSuccessfulSync`, `lastError`, and record counts for the status screen.
+- Progress is published while a run works, not only at its end: `SyncEngine.events` yields
+  started / progressed (after every committed batch, with the new state) / finished per type.
+  Steps report a real fraction of the run's backfill; heart rate reports counts and the newest
+  sample date only, since anchor order gives no total. One consumer: `AppModel`.
 - Runs never overlap. A request during a run queues one follow-up; later requests join it. An
   observer trigger runs only its type; launch, manual and background refresh run all types.
 - A failure that is not type-specific (signed out, 401 after refresh, setup/recovery gate, no

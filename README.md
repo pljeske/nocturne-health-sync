@@ -46,6 +46,9 @@ the bundle id automatically.
 3. The status screen shows, per data type, the last successful sync, how many records were uploaded,
    how far the history upload has got, and the last error, if any. **Sync now** (or pull to refresh)
    syncs immediately.
+   While a sync runs, **Syncing now** shows live progress per data type, updated after every
+   uploaded batch: a progress bar for steps, and for heart rate a running count with the newest
+   record reached (HealthKit gives no total for heart rate, so there is no percentage).
 
 "No data seen yet" means a sync succeeded but found nothing to upload. Health does not tell apps
 whether read access was denied, so this can mean either no data or no access; check

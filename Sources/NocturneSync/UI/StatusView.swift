@@ -12,6 +12,13 @@ struct StatusView: View {
       Section {
         LabeledContent("Instance", value: instance.host() ?? instance.absoluteString)
       }
+      if !model.activity.isEmpty {
+        Section("Syncing now") {
+          ForEach(model.activity, id: \.type) { progress in
+            SyncActivityRow(progress: progress)
+          }
+        }
+      }
       ForEach(model.statuses) { status in
         Section(status.title) {
           DataTypeStatusRows(status: status)
@@ -42,6 +49,42 @@ struct StatusView: View {
     .navigationTitle("NocturneSync")
     .refreshable { await model.syncNow() }
     .task { await model.refreshStatus() }
+  }
+}
+
+/// One data type's live progress. Steps have a real fraction; heart rate shows a spinner, because
+/// HealthKit returns samples in insertion order and the amount left is unknown.
+private struct SyncActivityRow: View {
+  let progress: SyncProgress
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      HStack {
+        Text(progress.type.title)
+        Spacer()
+        Text("\(progress.uploaded.formatted()) uploaded")
+          .monospacedDigit()
+          .foregroundStyle(.secondary)
+      }
+      if let fraction = progress.fractionCompleted {
+        ProgressView(value: fraction)
+      } else {
+        ProgressView()
+          .frame(maxWidth: .infinity, alignment: .leading)
+      }
+      if let reached = progress.reached {
+        Text(reachedText(reached))
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+      }
+    }
+    .accessibilityElement(children: .combine)
+  }
+
+  private func reachedText(_ date: Date) -> String {
+    let formatted = date.formatted(date: .abbreviated, time: .shortened)
+    return progress.fractionCompleted == nil
+      ? "Newest record so far: \(formatted)" : "History uploaded up to \(formatted)"
   }
 }
 
