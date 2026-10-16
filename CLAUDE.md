@@ -162,7 +162,8 @@ client, and record the Nocturne version tested against in `docs/compat.md`.
   `dataSource`, `syncIdentifier`. The server stores `timestamp` as UTC and discards the offset;
   `utcOffset` is the only carrier of local time.
 - `device` = `sample.sourceRevision.productType` falling back to the source name; `app` = the app
-  name plus marketing version (maps to Nocturne's `enteredBy`).
+  name plus marketing version, `NocturneSync <version>` (maps to Nocturne's `enteredBy`). The app
+  target supplies the version to `SyncEngine`.
 - Step count request fields: `timestamp`, `utcOffset`, `metric` (int), `source` (int bitmask),
   `device`, `app`, `dataSource`, `syncIdentifier`.
 - Dedup: `(dataSource, syncIdentifier)` is unique per tenant; re-uploading updates in place.

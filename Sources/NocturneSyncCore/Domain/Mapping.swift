@@ -1,8 +1,9 @@
 import Foundation
 
 public enum HeartRateMapper {
-  /// One sample becomes one record. `bpm` is rounded half away from zero.
-  public static func record(from sample: HeartRateSample, deviceTimeZone: TimeZone) throws(MappingError)
+  /// One sample becomes one record. `bpm` is rounded half away from zero. `app` is
+  /// `NocturneConstants.appIdentifier(version:)`.
+  public static func record(from sample: HeartRateSample, deviceTimeZone: TimeZone, app: String) throws(MappingError)
     -> HeartRateRecord
   {
     HeartRateRecord(
@@ -11,6 +12,7 @@ public enum HeartRateMapper {
         timeZoneIdentifier: sample.timeZoneIdentifier, fallback: deviceTimeZone, at: sample.date),
       bpm: try roundedBPM(sample.beatsPerMinute),
       device: sample.device,
+      app: app,
       syncIdentifier: sample.id.uuidString
     )
   }
@@ -26,7 +28,7 @@ public enum HeartRateMapper {
 public enum StepCountMapper {
   /// One bucket total becomes one record stamped with the bucket start. Zero totals map fine; the
   /// pipeline decides whether to upload them.
-  public static func record(from total: StepBucketTotal, deviceTimeZone: TimeZone, device: String)
+  public static func record(from total: StepBucketTotal, deviceTimeZone: TimeZone, device: String, app: String)
     throws(MappingError) -> StepCountRecord
   {
     let start = total.bucket.start
@@ -35,6 +37,7 @@ public enum StepCountMapper {
       utcOffsetMinutes: UTCOffsetResolver.offsetMinutes(timeZoneIdentifier: nil, fallback: deviceTimeZone, at: start),
       metric: try roundedSteps(total.steps),
       device: device,
+      app: app,
       syncIdentifier: total.bucket.syncIdentifier
     )
   }

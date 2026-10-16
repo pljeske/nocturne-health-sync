@@ -10,6 +10,7 @@ public actor SyncEngine {
   private let anchors: any AnchorStore
   private let stateStore: any SyncStateStore
   private let pipelines: [any SyncPipeline]
+  private let app: String
   private let retrier: Retrier
   private let now: @Sendable () -> Date
   private let timeZone: @Sendable () -> TimeZone
@@ -36,6 +37,7 @@ public actor SyncEngine {
     anchors: any AnchorStore,
     stateStore: any SyncStateStore,
     pipelines: [any SyncPipeline],
+    app: String,
     retryPolicy: RetryPolicy = .default,
     now: @escaping @Sendable () -> Date = Date.init,
     timeZone: @escaping @Sendable () -> TimeZone = { TimeZone.current },
@@ -48,6 +50,7 @@ public actor SyncEngine {
     self.anchors = anchors
     self.stateStore = stateStore
     self.pipelines = pipelines
+    self.app = app
     self.retrier = Retrier(policy: retryPolicy, sleep: sleep, unitRandom: unitRandom)
     self.now = now
     self.timeZone = timeZone
@@ -128,7 +131,8 @@ public actor SyncEngine {
         break
       }
       let context = SyncContext(
-        type: type, health: health, client: client, now: startedAt, timeZone: zone, retrier: retrier, engine: self)
+        type: type, health: health, client: client, now: startedAt, timeZone: zone, app: app, retrier: retrier,
+        engine: self)
       let result = record(await pipeline.run(context), for: type)
       report.results[type] = result
       report.uploaded[type] = committedThisRun[type, default: 0]

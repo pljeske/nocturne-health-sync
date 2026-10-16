@@ -74,7 +74,7 @@ public struct HeartRatePipeline: SyncPipeline {
         throw .failed(.health(error))
       }
 
-      let records = map(page.samples, timeZone: context.timeZone)
+      let records = map(page.samples, timeZone: context.timeZone, app: context.app)
       for chunk in records.chunks(ofCount: NocturneAPI.uploadChunkSize) {
         guard !Task.isCancelled else { throw .cancelled }
         let batch = Array(chunk)
@@ -116,10 +116,10 @@ public struct HeartRatePipeline: SyncPipeline {
 
   /// Maps every sample, skipping (and logging) one that cannot be represented. HealthKit validates
   /// heart rate values, so this is defensive: one bad sample must not pin the anchor forever.
-  private func map(_ samples: [HeartRateSample], timeZone: TimeZone) -> [HeartRateRecord] {
+  private func map(_ samples: [HeartRateSample], timeZone: TimeZone, app: String) -> [HeartRateRecord] {
     samples.compactMap { sample -> HeartRateRecord? in
       do throws(MappingError) {
-        return try HeartRateMapper.record(from: sample, deviceTimeZone: timeZone)
+        return try HeartRateMapper.record(from: sample, deviceTimeZone: timeZone, app: app)
       } catch {
         EngineLog.skippedSample(.heartRate, error)
         return nil

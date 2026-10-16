@@ -52,6 +52,8 @@ public struct SyncContext: Sendable {
   public let now: Date
   /// Device time zone for `utcOffset` when a sample carries none.
   public let timeZone: TimeZone
+  /// `app` field of every record: `NocturneConstants.appIdentifier(version:)`.
+  public let app: String
   let retrier: Retrier
   let engine: SyncEngine
 

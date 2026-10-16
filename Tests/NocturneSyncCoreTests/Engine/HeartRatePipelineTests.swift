@@ -39,6 +39,7 @@ import Testing
     #expect(record.utcOffsetMinutes == 0)
     #expect(record.bpm == 60)
     #expect(record.device == "Watch7,1")
+    #expect(record.app == "NocturneSync 0.1.0")
   }
 
   @Test func cutoffIsPersistedBeforeTheFirstQueryAndNeverMoves() async throws {

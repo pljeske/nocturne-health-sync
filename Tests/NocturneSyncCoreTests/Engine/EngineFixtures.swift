@@ -8,6 +8,7 @@ enum EngineFixtures {
   /// 2025-10-09 08:53:20 UTC.
   static let start = Date(timeIntervalSince1970: 1_760_000_000)
   static let utc = TimeZone(identifier: "UTC")!
+  static let app = "NocturneSync 0.1.0"
 
   /// `count` samples five seconds apart, beginning one day before `start`.
   static func heartRates(_ count: Int, from first: Int = 0, at base: Date = start.addingTimeInterval(-86_400))
@@ -97,7 +98,7 @@ struct EngineHarness {
     self.sleeps = sleeps
     engine = SyncEngine(
       health: health, client: client, anchors: anchors, stateStore: states, pipelines: pipelines,
-      retryPolicy: retryPolicy, now: { clock.now }, timeZone: { EngineFixtures.utc },
+      app: EngineFixtures.app, retryPolicy: retryPolicy, now: { clock.now }, timeZone: { EngineFixtures.utc },
       sleep: { sleeps.sleep($0) }, unitRandom: { unitRandom })
   }
 }
