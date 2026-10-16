@@ -13,6 +13,18 @@ public struct StepBucket: Sendable, Hashable {
     self.init(startUnixSeconds: Int(seconds), bucketSeconds: bucketSeconds)
   }
 
+  /// The bucket that starts at `start`, or nil when `start` is not on a bucket boundary. Allows one
+  /// millisecond of floating-point slack, so a boundary computed by calendar arithmetic still matches.
+  public init?(startingAt start: Date, bucketSeconds: Int = NocturneConstants.stepBucketSeconds) {
+    precondition(bucketSeconds > 0, "bucketSeconds must be positive")
+    let seconds = start.timeIntervalSince1970
+    let whole = seconds.rounded()
+    guard abs(seconds - whole) < 0.001, let startUnixSeconds = Int(exactly: whole),
+      startUnixSeconds.isMultiple(of: bucketSeconds)
+    else { return nil }
+    self.init(startUnixSeconds: startUnixSeconds, bucketSeconds: bucketSeconds)
+  }
+
   init(startUnixSeconds: Int, bucketSeconds: Int) {
     self.startUnixSeconds = startUnixSeconds
     self.bucketSeconds = bucketSeconds

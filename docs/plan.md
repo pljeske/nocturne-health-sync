@@ -121,7 +121,8 @@ docs/compat.md                      Nocturne version tested against
 ### 5. HealthSource (`Engine/HealthSource.swift`, `HealthKit/`)
 
 - `HealthSource` protocol in the core:
-  `heartRateSamples(after: Data?, limit: Int) -> (samples: [HeartRateSample], anchor: Data)`,
+  `heartRateSamples(after: Data?, startingAt: Date, limit: Int) -> HeartRatePage` (samples, anchor,
+  `mightHaveMore`),
   `stepTotals(in: DateInterval, bucketSeconds: Int) -> [StepBucketTotal]`,
   `requestReadAuthorization()`, `startObserving(type, onChange)`,
   `enableBackgroundDelivery(type)`. `HealthSourceError.databaseInaccessible` and `.other`.
@@ -131,8 +132,10 @@ docs/compat.md                      Nocturne version tested against
   with `.cumulativeSum` applies source prioritisation; `anchorDate` = Unix epoch with a 5 minute
   `DateComponents` interval yields epoch-aligned buckets; `HKError.Code.errorDatabaseInaccessible`
   while locked; observer completion handler must always be called.
-- The 90-day backfill predicate for heart rate is set on the first anchored query only
-  (`startDate >= now - 90 d`); later queries run anchor-only.
+- Every anchored heart rate query carries a `startDate >= cutoff` predicate supplied by the engine.
+  (Changed from "first query only": anchor order is insertion order, not date order, so a later
+  page without the predicate can return old samples inserted late, e.g. a history import.) How the
+  cutoff is chosen is open decision 7 in `CLAUDE.md`, to settle before step 6.
 - No unit tests possible for the live source. The fake is what the engine tests use.
 
 ### 6. SyncEngine and heart rate pipeline (`Engine/`)

@@ -114,6 +114,8 @@ OAuth `client_id` per base URL; only `AuthSession` writes it (sign-in happens be
 - Always pass a `limit` (default 2000 samples) so each query result is uploadable within one
   background execution. Loop until the result is short of the limit. Without a limit, a workout-
   heavy backfill returns tens of thousands of samples and the anchor never commits.
+- Every anchored query carries a `startDate >= cutoff` predicate. Anchor order is insertion order,
+  not date order, so an anchor alone does not bound a page by date.
 - One sample → one Nocturne record. `bpm` = sample value in count/min, rounded to Int.
 - `syncIdentifier` = `sample.uuid.uuidString`.
 - Advance the anchor only after every batch derived from that query result got a 2xx.
@@ -245,4 +247,10 @@ Decided 2026-10-15:
    (`/api/oauth/device`) targets input-constrained devices and is not used.
 6. Minimum iOS version 18.
 
-No decisions are currently open.
+Open:
+
+7. Heart rate cutoff after the initial backfill. (a) Fixed: persist `now - 90 d` from the first run
+   and use it forever, so incremental sync uploads everything new, even after a long idle period.
+   (b) Rolling: `now - 90 d` on every query; stateless, but samples older than 90 days at read time
+   are never uploaded (e.g. after re-login following 90+ idle days). Steps use a fixed watermark
+   already, which argues for (a).
