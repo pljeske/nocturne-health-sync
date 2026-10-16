@@ -180,6 +180,22 @@ final class Invocations: Sendable {
     #expect(await harness.engine.state == nil)
   }
 
+  @Test func persistedStateIsReadableBeforeAnyRun() async throws {
+    let saved = SyncState(stepCount: .init(uploadedCount: 12))
+    let harness = EngineHarness(
+      states: InMemorySyncStateStore(saved), pipelines: [stub(.heartRate, Invocations(), result: .completed)])
+    #expect(await harness.engine.state == nil)
+    #expect(await harness.engine.persistedState() == saved)
+    #expect(await harness.engine.state == saved)
+  }
+
+  @Test func persistedStateIsNilWhenUnreadable() async throws {
+    let states = InMemorySyncStateStore()
+    states.loadError = FileStoreError.read(URL(filePath: "/state.json"), underlying: CocoaError(.fileReadNoPermission))
+    let harness = EngineHarness(states: states, pipelines: [])
+    #expect(await harness.engine.persistedState() == nil)
+  }
+
   @Test func statusWriteFailureTurnsSuccessIntoAStorageFailure() async throws {
     let states = InMemorySyncStateStore()
     states.failSaves = true

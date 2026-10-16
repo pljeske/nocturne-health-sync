@@ -104,6 +104,20 @@ import Testing
     #expect(store.tokens == nil)
   }
 
+  @Test func tokensOfAnotherInstanceAreNeverUsed() async {
+    let other = URL(string: "https://other.example.test")!
+    let transport = FakeHTTPTransport()
+    let store = InMemoryTokenStore(tokensByInstance: [other: AuthFixtures.tokens()])
+    let session = AuthFixtures.session(transport, store: store)
+    #expect(await !session.isSignedIn)
+    let error = await thrownAuthError { () throws(AuthError) in try await session.validAccessToken() }
+    guard case .signedOut = error else {
+      Issue.record("expected .signedOut, got \(String(describing: error))")
+      return
+    }
+    #expect(await transport.requests.isEmpty)
+  }
+
   @Test func signOutClearsLocallyThenRevokes() async throws {
     let transport = FakeHTTPTransport(script: [.response(status: 200)])
     let store = InMemoryTokenStore(tokens: AuthFixtures.tokens(), clientIDs: [AuthFixtures.baseURL: "client-abc"])
@@ -212,7 +226,7 @@ import Testing
       return
     }
     #expect(store.tokens == nil)
-    #expect(store.events.contains(.clearTokens))
+    #expect(store.events.contains(.clearTokens(AuthFixtures.baseURL)))
     #expect(await !session.isSignedIn)
 
     let second = await thrownAuthError { () throws(AuthError) in try await session.validAccessToken() }

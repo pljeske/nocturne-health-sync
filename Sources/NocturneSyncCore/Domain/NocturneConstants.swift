@@ -7,6 +7,11 @@ public enum NocturneConstants {
   /// Step bucket length. Part of every step `syncIdentifier`, so it is as permanent as `dataSource`.
   public static let stepBucketSeconds = 300
 
+  /// `device` of every step record (decision 8). A step bucket is Health's source-prioritised total
+  /// of iPhone and Watch, so it names where the number comes from, not a recording device. Not part of
+  /// the dedup key.
+  public static let stepDevice = "Apple Health"
+
   /// Display name; the `app` field of every record is `appIdentifier(version:)`.
   public static let appName = "NocturneSync"
 

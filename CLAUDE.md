@@ -79,7 +79,9 @@ App (SwiftUI, settings, auth UI)
 
 `SyncStateStore` holds the step backfill watermark and per-type status (`lastSuccessfulSync`,
 `lastError`, counts). Only `SyncEngine` writes it. `TokenStore` holds the `TokenSet` and the cached
-OAuth `client_id` per base URL; only `AuthSession` writes it (sign-in happens before any engine runs).
+OAuth `client_id`, both keyed by instance base URL; only `AuthSession` writes it (sign-in happens
+before any engine runs). Anchors and sync state live in a directory per instance
+(`StoreLocation`), so a different instance starts its own backfill.
 
 - One `SyncEngine` actor is the only writer of anchors and the only caller of the upload client.
   Background delivery callbacks, BG tasks, and manual "Sync now" all funnel into it.
@@ -140,8 +142,8 @@ OAuth `client_id` per base URL; only `AuthSession` writes it (sign-in happens be
   start)` in one-day (86 400 s) slices, oldest first, committing the watermark after each slice
   until caught up or cancelled. Every boundary is an epoch-aligned bucket start; local time never
   enters the window arithmetic. Buckets that round to zero steps are not uploaded.
-- `device` on step records is an app-chosen constant passed to `StepsPipeline`: a bucket is
-  Health's merged total and has no single recording device.
+- `device` on step records is `"Apple Health"` (decision 8, `NocturneConstants.stepDevice`): a
+  bucket is Health's merged total and has no single recording device.
 - A bucket that was non-empty once and later drops to zero in Health is never zeroed on the
   server. Known gap, document it.
 - `source` bitmask: send `0` (bit 0 clear = per-interval delta, bit 1 clear = safe to sum).
@@ -266,5 +268,7 @@ Decided 2026-10-16:
 7. Heart rate cutoff is fixed: the first run persists `now - 90 d` (`SyncState.heartRateBackfillStart`)
    and every anchored query uses it forever. Incremental sync uploads everything new, even after a
    long idle period; nothing older than the original backfill start is ever uploaded.
+8. Step records carry `device` = `"Apple Health"`: the value is Health's merged total, not one
+   device's reading. Not part of the dedup key, so it can change without duplicating data.
 
 No decisions are currently open.

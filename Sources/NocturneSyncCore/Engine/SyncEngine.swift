@@ -59,6 +59,12 @@ public actor SyncEngine {
   /// The last loaded or written state, for the status screen. Nil until the first run loads it.
   public var state: SyncState? { loadedState }
 
+  /// The persisted state, loading it if no run has yet, for the status screen at launch. Nil when the
+  /// file cannot be read (e.g. before first unlock); a corrupt file reads as the default state.
+  public func persistedState() -> SyncState? {
+    try? loadStateIfNeeded()
+  }
+
   /// Runs (or joins a queued run of) the pipelines `reason` selects and returns that run's report.
   public func sync(reason: SyncReason) async -> SyncReport {
     if let queued {

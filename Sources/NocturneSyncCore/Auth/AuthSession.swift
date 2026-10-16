@@ -63,7 +63,7 @@ public actor AuthSession {
     self.configuration = configuration
     self.store = store
     self.now = now
-    self.tokens = try? store.loadTokens()
+    self.tokens = try? store.loadTokens(for: client.baseURL)
   }
 
   public var isSignedIn: Bool { tokens != nil }
@@ -207,7 +207,7 @@ public actor AuthSession {
 
   private func persist(_ set: TokenSet) throws(AuthError) {
     do {
-      try store.saveTokens(set)
+      try store.saveTokens(set, for: client.baseURL)
       needsPersist = false
     } catch {
       needsPersist = true
@@ -219,7 +219,7 @@ public actor AuthSession {
     tokens = nil
     needsPersist = false
     do {
-      try store.clearTokens()
+      try store.clearTokens(for: client.baseURL)
     } catch {
       throw .storage(error)
     }

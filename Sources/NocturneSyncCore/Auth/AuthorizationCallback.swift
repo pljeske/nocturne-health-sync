@@ -7,6 +7,13 @@ public struct PendingAuthorization: Sendable, Hashable {
   public let clientID: String
   public let state: String
   public let pkce: PKCE
+
+  public init(url: URL, clientID: String, state: String, pkce: PKCE) {
+    self.url = url
+    self.clientID = clientID
+    self.state = state
+    self.pkce = pkce
+  }
 }
 
 /// Parses the redirect `<bundle-id>://oauth/callback?code=...&state=...` (or `?error=...`).

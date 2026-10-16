@@ -14,15 +14,14 @@ struct KeychainTokenStore: TokenStore {
   }
 
   private let service: String
-  private static let tokensAccount = "oauth-tokens"
 
   /// - Parameter service: a reverse-DNS name unique to this app, typically the bundle id.
   init(service: String) {
     self.service = service
   }
 
-  func loadTokens() throws -> TokenSet? {
-    guard let data = try read(account: Self.tokensAccount) else { return nil }
+  func loadTokens(for baseURL: URL) throws -> TokenSet? {
+    guard let data = try read(account: Self.tokensAccount(for: baseURL)) else { return nil }
     do {
       return try JSONDecoder().decode(TokenSet.self, from: data)
     } catch {
@@ -30,12 +29,12 @@ struct KeychainTokenStore: TokenStore {
     }
   }
 
-  func saveTokens(_ tokens: TokenSet) throws {
-    try write(try JSONEncoder().encode(tokens), account: Self.tokensAccount)
+  func saveTokens(_ tokens: TokenSet, for baseURL: URL) throws {
+    try write(try JSONEncoder().encode(tokens), account: Self.tokensAccount(for: baseURL))
   }
 
-  func clearTokens() throws {
-    try delete(account: Self.tokensAccount)
+  func clearTokens(for baseURL: URL) throws {
+    try delete(account: Self.tokensAccount(for: baseURL))
   }
 
   func loadClientID(for baseURL: URL) throws -> String? {
@@ -46,6 +45,10 @@ struct KeychainTokenStore: TokenStore {
 
   func saveClientID(_ clientID: String, for baseURL: URL) throws {
     try write(Data(clientID.utf8), account: Self.clientIDAccount(for: baseURL))
+  }
+
+  private static func tokensAccount(for baseURL: URL) -> String {
+    "oauth-tokens:\(baseURL.absoluteString)"
   }
 
   private static func clientIDAccount(for baseURL: URL) -> String {
