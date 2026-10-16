@@ -55,6 +55,14 @@ swift format lint --strict --recursive Sources Tests Package.swift
 swift format --in-place --recursive Sources Tests Package.swift
 ```
 
+Integration tests against a local development Nocturne (skipped unless the URL is set; see
+`docs/integration.md`):
+
+```sh
+NOCTURNE_INTEGRATION_URL=<tenant url> NOCTURNE_INTEGRATION_TOKEN=<token> \
+  swift test --filter NocturneSyncIntegrationTests
+```
+
 App target (Mac with Xcode 16+ only; `xcodegen generate` first, the project is not committed):
 
 ```sh

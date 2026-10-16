@@ -23,6 +23,12 @@ let package = Package(
       name: "NocturneSyncFeaturesTests",
       dependencies: ["NocturneSyncFeatures", "NocturneSyncCore"]
     ),
+    // Against a running Nocturne; every test is skipped unless NOCTURNE_INTEGRATION_URL is set.
+    // See docs/integration.md.
+    .testTarget(
+      name: "NocturneSyncIntegrationTests",
+      dependencies: ["NocturneSyncCore"]
+    ),
   ],
   swiftLanguageModes: [.v6]
 )
