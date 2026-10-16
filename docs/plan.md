@@ -121,7 +121,8 @@ docs/compat.md                      Nocturne version tested against
 ### 5. HealthSource (`Engine/HealthSource.swift`, `HealthKit/`)
 
 - `HealthSource` protocol in the core:
-  `heartRateSamples(after: Data?, limit: Int) -> (samples: [HeartRateSample], anchor: Data)`,
+  `heartRateSamples(after: Data?, startingAt: Date, limit: Int) -> HeartRatePage` (samples, anchor,
+  `mightHaveMore`),
   `stepTotals(in: DateInterval, bucketSeconds: Int) -> [StepBucketTotal]`,
   `requestReadAuthorization()`, `startObserving(type, onChange)`,
   `enableBackgroundDelivery(type)`. `HealthSourceError.databaseInaccessible` and `.other`.
@@ -131,8 +132,10 @@ docs/compat.md                      Nocturne version tested against
   with `.cumulativeSum` applies source prioritisation; `anchorDate` = Unix epoch with a 5 minute
   `DateComponents` interval yields epoch-aligned buckets; `HKError.Code.errorDatabaseInaccessible`
   while locked; observer completion handler must always be called.
-- The 90-day backfill predicate for heart rate is set on the first anchored query only
-  (`startDate >= now - 90 d`); later queries run anchor-only.
+- Every anchored heart rate query carries a `startDate >= cutoff` predicate supplied by the engine.
+  (Changed from "first query only": anchor order is insertion order, not date order, so a later
+  page without the predicate can return old samples inserted late, e.g. a history import.) The
+  cutoff is fixed at the first run (decision 7 in `CLAUDE.md`).
 - No unit tests possible for the live source. The fake is what the engine tests use.
 
 ### 6. SyncEngine and heart rate pipeline (`Engine/`)
@@ -142,6 +145,8 @@ docs/compat.md                      Nocturne version tested against
   for the run.
 - `SyncEngine` actor: `sync(reason:)` serialises runs (a second request while one is running
   coalesces into one follow-up run), owns all store writes, exposes `SyncState` for the UI.
+- The first run persists the heart rate cutoff `now - 90 d` in `SyncState` before querying
+  (decision 7); every later run reuses it.
 - `HeartRatePipeline`: loop { read page with limit 2000 → map → chunk → upload all chunks →
   commit anchor → record status } until a page is short of the limit. Checks `Task.isCancelled`
   at every chunk boundary; cancellation between chunks does not commit the anchor.
@@ -152,16 +157,20 @@ docs/compat.md                      Nocturne version tested against
 
 ### 7. Steps pipeline (`Engine/StepsPipeline.swift`)
 
-- Each run uploads the lookback window `[now - 24 h, now)`. While the backfill watermark is
-  earlier than `now - 24 h`, the run also uploads one backfill slice of 1 day starting at the
-  watermark (oldest first) and advances the watermark only after every chunk of that slice
-  succeeded. The first run sets the watermark to `now - 90 d`.
+- Each run uploads the lookback window `[now - 24 h, now)` first. While the backfill watermark is
+  earlier than the lookback start, the run then uploads 1-day slices starting at the watermark
+  (oldest first), advancing the watermark after every chunk of a slice succeeded, until caught up
+  or cancelled. The first run sets the watermark to `now - 90 d`. (Changed from "one slice per
+  run": step triggers arrive at most hourly, so one slice per run would take ~90 runs.)
 - Lookback uploads never write state except status; idempotency relies on the server upsert.
 - Tests: window and slice computation around DST and month boundaries, watermark advances only
   on success, empty window produces no request, buckets with zero steps are skipped, bucket
   identifiers match step 1.
 
 ### 8. Scheduling and launch wiring (`App/`)
+
+Implemented as `AppModel` in the `NocturneSyncFeatures` package target (tested on Linux against
+fakes) plus thin glue in the iOS target (`AppDelegate`, `BackgroundRefresh`, `LiveEnvironment`).
 
 - On every launch: request authorization if not yet requested, `enableBackgroundDelivery` for
   both types (`.immediate` for heart rate, `.hourly` for steps, knowing iOS caps steps anyway),
@@ -173,6 +182,9 @@ docs/compat.md                      Nocturne version tested against
   on the simulator.
 
 ### 9. App UI (`UI/`)
+
+Views in the iOS target bind to `AppModel`; status rows (`DataTypeStatus`), address parsing
+(`InstanceURL`) and user messages are in `NocturneSyncFeatures` and tested there.
 
 - Onboarding: base URL entry with validation, "Sign in" launching `ASWebAuthenticationSession`
   with the PKCE URL from `AuthSession`, callback scheme = bundle id.

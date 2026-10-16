@@ -44,14 +44,23 @@ Out of scope (do not add without asking):
 
 ## Commands
 
-Core package (`NocturneSyncCore`, Foundation only; works on macOS and Linux, including Claude Code
-cloud sessions, where `.claude/hooks/session-start.sh` installs a Swift 6 toolchain to `/opt/swift`):
+Swift package (`NocturneSyncCore` and `NocturneSyncFeatures`, Foundation + Observation only; works on
+macOS and Linux, including Claude Code cloud sessions, where `.claude/hooks/session-start.sh`
+installs a Swift 6 toolchain to `/opt/swift`):
 
 ```sh
 swift build
 swift test
 swift format lint --strict --recursive Sources Tests Package.swift
 swift format --in-place --recursive Sources Tests Package.swift
+```
+
+Integration tests against a local development Nocturne (skipped unless the URL is set; see
+`docs/integration.md`):
+
+```sh
+NOCTURNE_INTEGRATION_URL=<tenant url> NOCTURNE_INTEGRATION_TOKEN=<token> \
+  swift test --filter NocturneSyncIntegrationTests
 ```
 
 App target (Mac with Xcode 16+ only; `xcodegen generate` first, the project is not committed):
@@ -77,8 +86,11 @@ App (SwiftUI, settings, auth UI)
      └─ Stores                AnchorStore (file), TokenStore (Keychain), SyncStateStore (file)
 ```
 
-`SyncStateStore` holds the step backfill watermark, per-type status (`lastSuccessfulSync`,
-`lastError`, counts), and the cached OAuth `client_id` per base URL. Only `SyncEngine` writes it.
+`SyncStateStore` holds the step backfill watermark and per-type status (`lastSuccessfulSync`,
+`lastError`, counts). Only `SyncEngine` writes it. `TokenStore` holds the `TokenSet` and the cached
+OAuth `client_id`, both keyed by instance base URL; only `AuthSession` writes it (sign-in happens
+before any engine runs). Anchors and sync state live in a directory per instance
+(`StoreLocation`), so a different instance starts its own backfill.
 
 - One `SyncEngine` actor is the only writer of anchors and the only caller of the upload client.
   Background delivery callbacks, BG tasks, and manual "Sync now" all funnel into it.
@@ -86,6 +98,13 @@ App (SwiftUI, settings, auth UI)
   means adding a pipeline, not touching the engine.
 - `HealthSource` and `NocturneClient` are protocols so the engine is fully testable without
   HealthKit or a network.
+- The app layer's logic lives in the `NocturneSyncFeatures` package target: `AppModel`
+  (`@Observable`, the single entry point for launch, sign-in, Health observers, BG refresh, "Sync
+  now", sign-out), status presentation and instance URL parsing, against small protocols
+  (`AuthService`, `SyncService`, `WebAuthenticating`, `BackgroundScheduling`, `SettingsStore`).
+  The iOS target (`Sources/NocturneSync`) holds only Apple-framework glue: `HealthKitSource`,
+  `KeychainTokenStore`, BGTaskScheduler, the `ASWebAuthenticationSession` adapter, SwiftUI views,
+  and `LiveEnvironment`, the composition root. Keep new logic out of the iOS target.
 
 ## HealthKit rules
 
@@ -102,8 +121,10 @@ App (SwiftUI, settings, auth UI)
   `HKError.errorDatabaseInaccessible` as "retry later": do not advance anchors, do not surface
   an error.
 - Persist state so it is readable after first unlock in the background:
-  anchors with file protection `.completeUntilFirstUserAuthentication`, Keychain items with
-  `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`.
+  anchors and sync state with file protection `.completeUntilFirstUserAuthentication`, Keychain
+  items with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`. The store directory is excluded
+  from backups: anchors are opaque handles into one device's HealthKit store, and the rest is
+  rebuilt by a single sync.
 
 ### Heart rate
 
@@ -111,6 +132,9 @@ App (SwiftUI, settings, auth UI)
 - Always pass a `limit` (default 2000 samples) so each query result is uploadable within one
   background execution. Loop until the result is short of the limit. Without a limit, a workout-
   heavy backfill returns tens of thousands of samples and the anchor never commits.
+- Every anchored query carries a `startDate >= cutoff` predicate, with the cutoff fixed at the first
+  run (decision 7). Anchor order is insertion order, not date order, so an anchor alone does not
+  bound a page by date.
 - One sample → one Nocturne record. `bpm` = sample value in count/min, rounded to Int.
 - `syncIdentifier` = `sample.uuid.uuidString`.
 - Advance the anchor only after every batch derived from that query result got a 2xx.
@@ -130,6 +154,12 @@ App (SwiftUI, settings, auth UI)
   and re-uploads every non-empty bucket in it. Upsert-by-syncIdentifier makes this idempotent; the
   lookback covers late Watch syncs. The only persisted step state is "backfill completed up to"
   (in `SyncStateStore`).
+- Each run: the lookback window first (no state written), then the backfill `[watermark, lookback
+  start)` in one-day (86 400 s) slices, oldest first, committing the watermark after each slice
+  until caught up or cancelled. Every boundary is an epoch-aligned bucket start; local time never
+  enters the window arithmetic. Buckets that round to zero steps are not uploaded.
+- `device` on step records is `"Apple Health"` (decision 8, `NocturneConstants.stepDevice`): a
+  bucket is Health's merged total and has no single recording device.
 - A bucket that was non-empty once and later drops to zero in Health is never zeroed on the
   server. Known gap, document it.
 - `source` bitmask: send `0` (bit 0 clear = per-interval delta, bit 1 clear = safe to sum).
@@ -148,12 +178,16 @@ client, and record the Nocturne version tested against in `docs/compat.md`.
   chunk. Success is 200 with the written records; treat any 2xx as success.
 - Errors are RFC 7807 Problem Details (`title`, `detail`, `status`). Show `detail` on the status
   screen.
+- The setup gate answers 503 outside Problem Details: `{ "error": "setup_required" |
+  "recovery_mode_active", "message", "setupRequired", "recoveryMode" }` (`TenantSetupMiddleware`).
+  Any other 503 is an ordinary server error.
 - Heart rate request fields: `timestamp` (ISO 8601 with offset), `utcOffset` (minutes),
   `bpm` (int), `accuracy` (int, send 0 unless a real value exists), `device`, `app`,
   `dataSource`, `syncIdentifier`. The server stores `timestamp` as UTC and discards the offset;
   `utcOffset` is the only carrier of local time.
 - `device` = `sample.sourceRevision.productType` falling back to the source name; `app` = the app
-  name plus marketing version (maps to Nocturne's `enteredBy`).
+  name plus marketing version, `NocturneSync <version>` (maps to Nocturne's `enteredBy`). The app
+  target supplies the version to `SyncEngine`.
 - Step count request fields: `timestamp`, `utcOffset`, `metric` (int), `source` (int bitmask),
   `device`, `app`, `dataSource`, `syncIdentifier`.
 - Dedup: `(dataSource, syncIdentifier)` is unique per tenant; re-uploading updates in place.
@@ -177,6 +211,11 @@ client, and record the Nocturne version tested against in `docs/compat.md`.
   Use the bundle id as the scheme.
 - Scopes: `heartrate.readwrite stepcount.readwrite`. Request nothing broader. PKCE is mandatory,
   `S256` only.
+- Wire shapes (`OAuthController`): `register` takes JSON (`client_name`, `redirect_uris`, `scope`,
+  `software_id`, `software_version`) and returns `client_id`; `token` and `revoke` take
+  `application/x-www-form-urlencoded`; `token` returns `access_token`, `expires_in`,
+  `refresh_token`, `scope`. OAuth errors are 400 `{ "error", "error_description" }`, not Problem
+  Details. The callback carries `code`/`state` or `error`/`error_description`, percent-encoded.
 - Refresh tokens rotate, and replaying an old one revokes the whole grant. Token refresh must be
   single-flight: one actor owns the token, concurrent callers await the same refresh task, and
   the new refresh token is persisted to Keychain before the access token is used.
@@ -197,6 +236,12 @@ client, and record the Nocturne version tested against in `docs/compat.md`.
 - Background time is short. A sync run must be cancellable at any batch boundary without
   losing committed progress.
 - Record per-type `lastSuccessfulSync`, `lastError`, and record counts for the status screen.
+- Runs never overlap. A request during a run queues one follow-up; later requests join it. An
+  observer trigger runs only its type; launch, manual and background refresh run all types.
+- A failure that is not type-specific (signed out, 401 after refresh, setup/recovery gate, no
+  network, 429, locked device, local storage) ends the whole run; others end only that type.
+- A sample that cannot be mapped (NaN, negative, out of range) is skipped and logged, never
+  retried: one bad sample must not pin the anchor forever.
 
 ## Testing
 
@@ -233,5 +278,13 @@ Decided 2026-10-15:
 5. Auth flow: Authorization Code + PKCE via `ASWebAuthenticationSession`. Nocturne's device flow
    (`/api/oauth/device`) targets input-constrained devices and is not used.
 6. Minimum iOS version 18.
+
+Decided 2026-10-16:
+
+7. Heart rate cutoff is fixed: the first run persists `now - 90 d` (`SyncState.heartRateBackfillStart`)
+   and every anchored query uses it forever. Incremental sync uploads everything new, even after a
+   long idle period; nothing older than the original backfill start is ever uploaded.
+8. Step records carry `device` = `"Apple Health"`: the value is Health's merged total, not one
+   device's reading. Not part of the dedup key, so it can change without duplicating data.
 
 No decisions are currently open.
