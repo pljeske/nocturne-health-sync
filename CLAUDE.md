@@ -114,8 +114,9 @@ OAuth `client_id` per base URL; only `AuthSession` writes it (sign-in happens be
 - Always pass a `limit` (default 2000 samples) so each query result is uploadable within one
   background execution. Loop until the result is short of the limit. Without a limit, a workout-
   heavy backfill returns tens of thousands of samples and the anchor never commits.
-- Every anchored query carries a `startDate >= cutoff` predicate. Anchor order is insertion order,
-  not date order, so an anchor alone does not bound a page by date.
+- Every anchored query carries a `startDate >= cutoff` predicate, with the cutoff fixed at the first
+  run (decision 7). Anchor order is insertion order, not date order, so an anchor alone does not
+  bound a page by date.
 - One sample → one Nocturne record. `bpm` = sample value in count/min, rounded to Int.
 - `syncIdentifier` = `sample.uuid.uuidString`.
 - Advance the anchor only after every batch derived from that query result got a 2xx.
@@ -210,6 +211,12 @@ client, and record the Nocturne version tested against in `docs/compat.md`.
 - Background time is short. A sync run must be cancellable at any batch boundary without
   losing committed progress.
 - Record per-type `lastSuccessfulSync`, `lastError`, and record counts for the status screen.
+- Runs never overlap. A request during a run queues one follow-up; later requests join it. An
+  observer trigger runs only its type; launch, manual and background refresh run all types.
+- A failure that is not type-specific (signed out, 401 after refresh, setup/recovery gate, no
+  network, 429, locked device, local storage) ends the whole run; others end only that type.
+- A sample that cannot be mapped (NaN, negative, out of range) is skipped and logged, never
+  retried: one bad sample must not pin the anchor forever.
 
 ## Testing
 
@@ -247,10 +254,10 @@ Decided 2026-10-15:
    (`/api/oauth/device`) targets input-constrained devices and is not used.
 6. Minimum iOS version 18.
 
-Open:
+Decided 2026-10-16:
 
-7. Heart rate cutoff after the initial backfill. (a) Fixed: persist `now - 90 d` from the first run
-   and use it forever, so incremental sync uploads everything new, even after a long idle period.
-   (b) Rolling: `now - 90 d` on every query; stateless, but samples older than 90 days at read time
-   are never uploaded (e.g. after re-login following 90+ idle days). Steps use a fixed watermark
-   already, which argues for (a).
+7. Heart rate cutoff is fixed: the first run persists `now - 90 d` (`SyncState.heartRateBackfillStart`)
+   and every anchored query uses it forever. Incremental sync uploads everything new, even after a
+   long idle period; nothing older than the original backfill start is ever uploaded.
+
+No decisions are currently open.

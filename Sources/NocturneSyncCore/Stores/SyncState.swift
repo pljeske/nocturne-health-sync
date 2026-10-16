@@ -23,7 +23,8 @@ public struct SyncState: Sendable, Hashable, Codable {
     public var lastSuccessfulSync: Date?
     /// Cleared by the next successful run.
     public var lastError: Failure?
-    /// Records uploaded since install, counted after each 2xx.
+    /// Records in committed batches since install. A batch counts once its anchor or watermark is
+    /// committed, so a re-upload after an anchor reset counts again.
     public var uploadedCount: Int
 
     public init(lastSuccessfulSync: Date? = nil, lastError: Failure? = nil, uploadedCount: Int = 0) {
@@ -42,18 +43,23 @@ public struct SyncState: Sendable, Hashable, Codable {
   /// Set when the heart rate anchored query first returned fewer samples than its limit, i.e. the
   /// 90-day history has been drained once and every later run is incremental.
   public var heartRateBackfillComplete: Bool
+  /// Lower bound of every heart rate query, persisted by the first run as `now - 90 d` and never moved
+  /// (decision 7). `nil` until that first run.
+  public var heartRateBackfillStart: Date?
 
   public init(
     heartRate: TypeStatus = TypeStatus(),
     stepCount: TypeStatus = TypeStatus(),
     stepBackfillCompletedThrough: Date? = nil,
-    heartRateBackfillComplete: Bool = false
+    heartRateBackfillComplete: Bool = false,
+    heartRateBackfillStart: Date? = nil
   ) {
     self.version = Self.currentVersion
     self.heartRate = heartRate
     self.stepCount = stepCount
     self.stepBackfillCompletedThrough = stepBackfillCompletedThrough
     self.heartRateBackfillComplete = heartRateBackfillComplete
+    self.heartRateBackfillStart = heartRateBackfillStart
   }
 
   public subscript(type: HealthDataType) -> TypeStatus {

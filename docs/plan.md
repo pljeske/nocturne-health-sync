@@ -134,8 +134,8 @@ docs/compat.md                      Nocturne version tested against
   while locked; observer completion handler must always be called.
 - Every anchored heart rate query carries a `startDate >= cutoff` predicate supplied by the engine.
   (Changed from "first query only": anchor order is insertion order, not date order, so a later
-  page without the predicate can return old samples inserted late, e.g. a history import.) How the
-  cutoff is chosen is open decision 7 in `CLAUDE.md`, to settle before step 6.
+  page without the predicate can return old samples inserted late, e.g. a history import.) The
+  cutoff is fixed at the first run (decision 7 in `CLAUDE.md`).
 - No unit tests possible for the live source. The fake is what the engine tests use.
 
 ### 6. SyncEngine and heart rate pipeline (`Engine/`)
@@ -145,6 +145,8 @@ docs/compat.md                      Nocturne version tested against
   for the run.
 - `SyncEngine` actor: `sync(reason:)` serialises runs (a second request while one is running
   coalesces into one follow-up run), owns all store writes, exposes `SyncState` for the UI.
+- The first run persists the heart rate cutoff `now - 90 d` in `SyncState` before querying
+  (decision 7); every later run reuses it.
 - `HeartRatePipeline`: loop { read page with limit 2000 → map → chunk → upload all chunks →
   commit anchor → record status } until a page is short of the limit. Checks `Task.isCancelled`
   at every chunk boundary; cancellation between chunks does not commit the anchor.

@@ -16,7 +16,8 @@ import Testing
           message: "Bulk operations are limited to 1000 step count records per request", occurredAt: now),
         uploadedCount: 7),
       stepBackfillCompletedThrough: now.addingTimeInterval(-86400),
-      heartRateBackfillComplete: true)
+      heartRateBackfillComplete: true,
+      heartRateBackfillStart: now.addingTimeInterval(-90 * 86400))
   }
 
   @Test func missingFileIsTheDefaultState() throws {
@@ -57,6 +58,7 @@ import Testing
           "uploadedCount" : 12345
         },
         "heartRateBackfillComplete" : true,
+        "heartRateBackfillStart" : "2024-04-04T09:46:40Z",
         "stepBackfillCompletedThrough" : "2024-07-02T09:46:40Z",
         "stepCount" : {
           "lastError" : {

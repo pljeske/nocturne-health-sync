@@ -10,7 +10,7 @@ final class InMemorySyncStateStore: SyncStateStore {
   private struct State {
     var current: SyncState
     var history: [SyncState] = []
-    var failLoads = false
+    var loadError: (any Error)?
     var failSaves = false
   }
 
@@ -22,9 +22,10 @@ final class InMemorySyncStateStore: SyncStateStore {
 
   var current: SyncState { state.withLock { $0.current } }
   var history: [SyncState] { state.withLock { $0.history } }
-  var failLoads: Bool {
-    get { state.withLock { $0.failLoads } }
-    set { state.withLock { $0.failLoads = newValue } }
+  /// Thrown by every `load()` while set.
+  var loadError: (any Error)? {
+    get { state.withLock { $0.loadError } }
+    set { state.withLock { $0.loadError = newValue } }
   }
   var failSaves: Bool {
     get { state.withLock { $0.failSaves } }
@@ -33,7 +34,7 @@ final class InMemorySyncStateStore: SyncStateStore {
 
   func load() throws -> SyncState {
     try state.withLock {
-      if $0.failLoads { throw Failure() }
+      if let error = $0.loadError { throw error }
       return $0.current
     }
   }
