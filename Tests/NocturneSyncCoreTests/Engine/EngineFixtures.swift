@@ -24,6 +24,15 @@ enum EngineFixtures {
   }
 }
 
+extension EngineFixtures {
+  /// One bucket with `steps` at every full hour in `[start, end)`.
+  static func hourlySteps(from start: Date, to end: Date, steps: Double = 10) -> [StepBucketTotal] {
+    StepBucket.buckets(overlapping: DateInterval(start: start, end: end))
+      .filter { $0.startUnixSeconds.isMultiple(of: 3600) && $0.start >= start }
+      .map { StepBucketTotal(bucket: $0, steps: steps) }
+  }
+}
+
 /// A settable clock.
 final class TestClock: Sendable {
   private let current: Mutex<Date>
@@ -86,9 +95,11 @@ struct EngineHarness {
     states: InMemorySyncStateStore = InMemorySyncStateStore(),
     pipelines: [any SyncPipeline] = [HeartRatePipeline()],
     retryPolicy: RetryPolicy = .default,
-    unitRandom: Double = 0.5
+    unitRandom: Double = 0.5,
+    start: Date = EngineFixtures.start,
+    timeZone: TimeZone = EngineFixtures.utc
   ) {
-    let clock = TestClock()
+    let clock = TestClock(start)
     let sleeps = SleepRecorder()
     self.health = health
     self.client = client
@@ -98,7 +109,7 @@ struct EngineHarness {
     self.sleeps = sleeps
     engine = SyncEngine(
       health: health, client: client, anchors: anchors, stateStore: states, pipelines: pipelines,
-      app: EngineFixtures.app, retryPolicy: retryPolicy, now: { clock.now }, timeZone: { EngineFixtures.utc },
+      app: EngineFixtures.app, retryPolicy: retryPolicy, now: { clock.now }, timeZone: { timeZone },
       sleep: { sleeps.sleep($0) }, unitRandom: { unitRandom })
   }
 }

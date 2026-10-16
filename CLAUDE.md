@@ -136,6 +136,12 @@ OAuth `client_id` per base URL; only `AuthSession` writes it (sign-in happens be
   and re-uploads every non-empty bucket in it. Upsert-by-syncIdentifier makes this idempotent; the
   lookback covers late Watch syncs. The only persisted step state is "backfill completed up to"
   (in `SyncStateStore`).
+- Each run: the lookback window first (no state written), then the backfill `[watermark, lookback
+  start)` in one-day (86 400 s) slices, oldest first, committing the watermark after each slice
+  until caught up or cancelled. Every boundary is an epoch-aligned bucket start; local time never
+  enters the window arithmetic. Buckets that round to zero steps are not uploaded.
+- `device` on step records is an app-chosen constant passed to `StepsPipeline`: a bucket is
+  Health's merged total and has no single recording device.
 - A bucket that was non-empty once and later drops to zero in Health is never zeroed on the
   server. Known gap, document it.
 - `source` bitmask: send `0` (bit 0 clear = per-interval delta, bit 1 clear = safe to sum).

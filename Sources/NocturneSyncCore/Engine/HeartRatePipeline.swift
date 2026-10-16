@@ -29,21 +29,7 @@ public struct HeartRatePipeline: SyncPipeline {
     }
   }
 
-  private enum Stop: Error {
-    case deferred
-    case cancelled
-    case failed(SyncFailure)
-
-    var result: PipelineResult {
-      switch self {
-      case .deferred: .deferred
-      case .cancelled: .cancelled
-      case .failed(let failure): .failed(failure)
-      }
-    }
-  }
-
-  private func sync(_ context: SyncContext) async throws(Stop) {
+  private func sync(_ context: SyncContext) async throws(PipelineStop) {
     let cutoff = try await cutoff(context)
     var anchor: Data?
     do {
@@ -103,7 +89,7 @@ public struct HeartRatePipeline: SyncPipeline {
   }
 
   /// The persisted cutoff, or `now - backfillDays` persisted before the first query (decision 7).
-  private func cutoff(_ context: SyncContext) async throws(Stop) -> Date {
+  private func cutoff(_ context: SyncContext) async throws(PipelineStop) -> Date {
     if let existing = await context.state().heartRateBackfillStart { return existing }
     let cutoff = context.now.addingTimeInterval(-TimeInterval(backfillDays) * 86_400)
     do {

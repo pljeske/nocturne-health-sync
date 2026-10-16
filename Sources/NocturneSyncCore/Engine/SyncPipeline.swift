@@ -35,6 +35,22 @@ public enum PipelineResult: Sendable {
   }
 }
 
+/// How a pipeline's internal loop ends early. Shared by the pipelines so they map Health and upload
+/// errors to results the same way.
+enum PipelineStop: Error {
+  case deferred
+  case cancelled
+  case failed(SyncFailure)
+
+  var result: PipelineResult {
+    switch self {
+    case .deferred: .deferred
+    case .cancelled: .cancelled
+    case .failed(let failure): .failed(failure)
+    }
+  }
+}
+
 /// One data type's read → map → batch → upload → commit loop. Adding a type means adding a pipeline;
 /// the engine does not change. A pipeline never touches stores directly: it reads and commits
 /// through `SyncContext`, which forwards to the engine, the only writer.

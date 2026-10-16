@@ -26,6 +26,10 @@ actor FakeNocturneClient: NocturneClient {
     calls.compactMap { if case .heartRates(let records) = $0 { records } else { nil } }
   }
 
+  var stepCountBatches: [[StepCountRecord]] {
+    calls.compactMap { if case .stepCounts(let records) = $0 { records } else { nil } }
+  }
+
   func uploadHeartRates(_ records: [HeartRateRecord]) async throws(NocturneClientError) {
     let index = calls.count
     calls.append(.heartRates(records))

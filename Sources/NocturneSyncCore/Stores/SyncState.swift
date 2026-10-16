@@ -23,8 +23,9 @@ public struct SyncState: Sendable, Hashable, Codable {
     public var lastSuccessfulSync: Date?
     /// Cleared by the next successful run.
     public var lastError: Failure?
-    /// Records in committed batches since install. A batch counts once its anchor or watermark is
-    /// committed, so a re-upload after an anchor reset counts again.
+    /// Records in committed batches since install. Heart rate: counted when the page's anchor is
+    /// committed, so a re-upload after an anchor reset counts again. Steps: counted when the backfill
+    /// watermark passes the bucket, so each bucket counts once; lookback re-uploads are not counted.
     public var uploadedCount: Int
 
     public init(lastSuccessfulSync: Date? = nil, lastError: Failure? = nil, uploadedCount: Int = 0) {

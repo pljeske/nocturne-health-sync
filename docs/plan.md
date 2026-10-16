@@ -157,10 +157,11 @@ docs/compat.md                      Nocturne version tested against
 
 ### 7. Steps pipeline (`Engine/StepsPipeline.swift`)
 
-- Each run uploads the lookback window `[now - 24 h, now)`. While the backfill watermark is
-  earlier than `now - 24 h`, the run also uploads one backfill slice of 1 day starting at the
-  watermark (oldest first) and advances the watermark only after every chunk of that slice
-  succeeded. The first run sets the watermark to `now - 90 d`.
+- Each run uploads the lookback window `[now - 24 h, now)` first. While the backfill watermark is
+  earlier than the lookback start, the run then uploads 1-day slices starting at the watermark
+  (oldest first), advancing the watermark after every chunk of a slice succeeded, until caught up
+  or cancelled. The first run sets the watermark to `now - 90 d`. (Changed from "one slice per
+  run": step triggers arrive at most hourly, so one slice per run would take ~90 runs.)
 - Lookback uploads never write state except status; idempotency relies on the server upsert.
 - Tests: window and slice computation around DST and month boundaries, watermark advances only
   on success, empty window produces no request, buckets with zero steps are skipped, bucket
