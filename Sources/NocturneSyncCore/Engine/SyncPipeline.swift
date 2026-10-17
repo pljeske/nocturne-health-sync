@@ -70,6 +70,9 @@ public struct SyncContext: Sendable {
   public let timeZone: TimeZone
   /// `app` field of every record: `NocturneConstants.appIdentifier(version:)`.
   public let app: String
+  /// True when "Sync now" started (or joined) this run. Pipelines may do extra work the user would
+  /// expect from an explicit request, e.g. re-sending data that was skipped as unchanged.
+  public let userRequested: Bool
   let retrier: Retrier
   let engine: SyncEngine
 
@@ -96,6 +99,12 @@ public struct SyncContext: Sendable {
     anchor: Data?, uploaded: Int, update: @escaping @Sendable (inout SyncState) -> Void = { _ in }
   ) async throws(SyncFailure) {
     try await engine.commit(type, anchor: anchor, uploaded: uploaded, update: update)
+  }
+
+  /// Publishes the run's progress for this type, with the current state, on `SyncEngine.events`.
+  /// Call after each commit.
+  public func reportProgress(_ progress: SyncProgress) async {
+    await engine.report(progress)
   }
 
   /// Writes state that is not tied to a batch (e.g. the heart rate cutoff, before the first query).

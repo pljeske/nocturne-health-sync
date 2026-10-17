@@ -21,7 +21,7 @@ public struct AppDependencies: Sendable {
     health: any HealthSource,
     backgroundScheduler: any BackgroundScheduling,
     callbackScheme: String,
-    backgroundRefreshInterval: TimeInterval = 3600,
+    backgroundRefreshInterval: TimeInterval = 4 * 3600,
     now: @escaping @Sendable () -> Date = Date.init,
     makeServices: @escaping @Sendable (URL) -> InstanceServices
   ) {
@@ -49,6 +49,9 @@ public final class AppModel {
   public private(set) var statuses: [DataTypeStatus] = []
   public private(set) var isSigningIn = false
   public private(set) var isSyncing = false
+  /// Per data type currently syncing, in `HealthDataType.allCases` order, updated after every
+  /// committed batch. Empty when nothing runs.
+  public private(set) var activity: [SyncProgress] = []
   /// Shown once, then cleared by the view.
   public var message: UserMessage?
   /// Bound to the instance address field.
@@ -57,7 +60,9 @@ public final class AppModel {
   @ObservationIgnored private let dependencies: AppDependencies
   @ObservationIgnored private var cached: (url: URL, services: InstanceServices)?
   @ObservationIgnored private var observersStarted = false
+  @ObservationIgnored private var healthAccessRequested = false
   @ObservationIgnored private var runningSyncs = 0
+  @ObservationIgnored private var eventListener: Task<Void, Never>?
 
   public init(dependencies: AppDependencies) {
     self.dependencies = dependencies
@@ -137,6 +142,7 @@ public final class AppModel {
     }
     phase = .signedOut(instance: instance)
     statuses = []
+    activity = []
   }
 
   // MARK: Syncing
@@ -188,6 +194,7 @@ public final class AppModel {
     if report.results.values.contains(where: Self.isSignedOut), case .signedIn(instance) = phase {
       phase = .signedOut(instance: instance)
       statuses = []
+      activity = []
       message = UserMessage(AuthError.signedOut)
       return report
     }
@@ -201,7 +208,11 @@ public final class AppModel {
 
   // MARK: Health
 
+  /// Once per process: HealthKit shows its sheet only the first time anyway, and later calls still
+  /// cost a round trip to the Health daemon.
   private func requestHealthAccess() async {
+    guard !healthAccessRequested else { return }
+    healthAccessRequested = true
     do {
       try await dependencies.health.requestReadAuthorization()
     } catch {
@@ -230,6 +241,40 @@ public final class AppModel {
     if let cached, cached.url == instance { return cached.services }
     let made = dependencies.makeServices(instance)
     cached = (instance, made)
+    listen(to: made.sync, instance: instance)
     return made
+  }
+
+  // MARK: Progress
+
+  /// Follows one instance's sync events for as long as it is the current instance.
+  private func listen(to sync: any SyncService, instance: URL) {
+    eventListener?.cancel()
+    let events = sync.events
+    eventListener = Task { [weak self] in
+      for await event in events {
+        self?.apply(event, from: instance)
+      }
+    }
+  }
+
+  func apply(_ event: SyncEvent, from instance: URL) {
+    guard case .signedIn(instance) = phase else { return }
+    switch event {
+    case .started(let type):
+      setActivity(SyncProgress(type: type))
+    case .progressed(let progress, let state):
+      setActivity(progress)
+      statuses = DataTypeStatus.make(from: state)
+    case .finished(let type):
+      activity.removeAll { $0.type == type }
+    }
+  }
+
+  private func setActivity(_ progress: SyncProgress) {
+    let order = HealthDataType.allCases
+    activity.removeAll { $0.type == progress.type }
+    activity.append(progress)
+    activity.sort { order.firstIndex(of: $0.type)! < order.firstIndex(of: $1.type)! }
   }
 }

@@ -35,7 +35,8 @@ enum BackgroundRefresh {
   @MainActor
   private static func handle(_ task: RefreshTask, model: AppModel) {
     // Keep one request pending even if this run is killed before it reschedules.
-    BGTaskRefreshScheduler().scheduleRefresh(earliestBegin: Date(timeIntervalSinceNow: 3600))
+    BGTaskRefreshScheduler().scheduleRefresh(
+      earliestBegin: Date(timeIntervalSinceNow: LiveEnvironment.backgroundRefreshInterval))
     let work = Task { @MainActor in
       let success = await model.performBackgroundRefresh()
       task.completed(success: success)

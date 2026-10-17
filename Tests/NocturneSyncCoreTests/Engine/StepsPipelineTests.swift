@@ -94,6 +94,90 @@ import Testing
     #expect(harness.states.current.stepBackfillCompletedThrough == laterLookback.start)
   }
 
+  @Test func unchangedLookbackSendsNothingAndWritesNothing() async throws {
+    let recent = EngineFixtures.hourlySteps(from: lookback.start, to: now)
+    let harness = harness(totals: recent)
+    _ = await harness.engine.sync(reason: .launch)
+    let callsAfterFirst = await harness.client.calls.count
+    let writesAfterFirst = harness.states.history.count
+    #expect(callsAfterFirst == 1)
+    #expect(Set(harness.states.current.stepLookbackSent.keys) == Set(recent.map(\.bucket.syncIdentifier)))
+
+    harness.clock.advance(by: 60)  // same window boundary: lookback start is still the same bucket
+    _ = await harness.engine.sync(reason: .healthChange(.stepCount))
+
+    // One state write for the status timestamp, no upload, no lookback-map write.
+    #expect(await harness.client.calls.count == callsAfterFirst)
+    #expect(harness.states.history.count == writesAfterFirst + 1)
+    #expect(harness.states.current.stepCount.lastSuccessfulSync == now.addingTimeInterval(60))
+  }
+
+  @Test func onlyChangedAndNewBucketsAreSent() async throws {
+    let recent = EngineFixtures.hourlySteps(from: lookback.start, to: now)
+    let harness = harness(totals: recent)
+    _ = await harness.engine.sync(reason: .launch)
+
+    let changed = StepBucketTotal(bucket: recent[3].bucket, steps: 99)
+    let added = StepBucketTotal(bucket: StepBucket(containing: now.addingTimeInterval(-600)), steps: 7)
+    await harness.health.setStepTotals([changed, added])
+    _ = await harness.engine.sync(reason: .healthChange(.stepCount))
+
+    let second = try #require(await harness.client.stepCountBatches.last)
+    #expect(Set(second.map(\.syncIdentifier)) == [changed.bucket.syncIdentifier, added.bucket.syncIdentifier])
+    #expect(harness.states.current.stepLookbackSent[changed.bucket.syncIdentifier] == 99)
+    #expect(harness.states.current.stepLookbackSent[added.bucket.syncIdentifier] == 7)
+  }
+
+  @Test func manualSyncResendsTheWholeWindow() async throws {
+    let recent = EngineFixtures.hourlySteps(from: lookback.start, to: now)
+    let harness = harness(totals: recent)
+    _ = await harness.engine.sync(reason: .launch)
+    _ = await harness.engine.sync(reason: .manual)
+    let batches = await harness.client.stepCountBatches
+    #expect(batches.count == 2)
+    #expect(batches[1].map(\.syncIdentifier) == batches[0].map(\.syncIdentifier))
+  }
+
+  @Test func failedLookbackUploadKeepsTheOldMapSoItIsRetried() async throws {
+    let recent = EngineFixtures.hourlySteps(from: lookback.start, to: now)
+    let harness = harness(totals: recent)
+    _ = await harness.engine.sync(reason: .launch)
+    let sentBefore = harness.states.current.stepLookbackSent
+
+    await harness.health.setStepTotals([StepBucketTotal(bucket: recent[0].bucket, steps: 500)])
+    let failing = FakeNocturneClient(script: [
+      .server(status: 500, retryAfter: nil), .server(status: 500, retryAfter: nil),
+      .server(status: 500, retryAfter: nil), .server(status: 500, retryAfter: nil),
+    ])
+    let retry = EngineHarness(
+      health: harness.health, client: failing, states: InMemorySyncStateStore(harness.states.current),
+      pipelines: [pipeline])
+    _ = await retry.engine.sync(reason: .healthChange(.stepCount))
+    #expect(retry.states.current.stepLookbackSent == sentBefore)
+
+    let recovered = EngineHarness(
+      health: harness.health, client: FakeNocturneClient(), states: InMemorySyncStateStore(retry.states.current),
+      pipelines: [pipeline])
+    _ = await recovered.engine.sync(reason: .healthChange(.stepCount))
+    let resent = try #require(await recovered.client.stepCountBatches.first)
+    #expect(resent.map(\.syncIdentifier) == [recent[0].bucket.syncIdentifier])
+    #expect(resent.first?.metric == 500)
+  }
+
+  @Test func mapIsPrunedToTheCurrentWindow() async throws {
+    let recent = EngineFixtures.hourlySteps(from: lookback.start, to: now)
+    let harness = harness(totals: recent)
+    _ = await harness.engine.sync(reason: .launch)
+    harness.clock.advance(by: 6 * 3600)
+    _ = await harness.engine.sync(reason: .healthChange(.stepCount))
+    let newLookback = StepWindows.lookback(now: now.addingTimeInterval(6 * 3600), hours: 24, bucketSeconds: 300)
+    let kept = harness.states.current.stepLookbackSent.keys
+    #expect(
+      kept.allSatisfy { id in recent.contains { $0.bucket.syncIdentifier == id && $0.bucket.start >= newLookback.start }
+      })
+    #expect(kept.count == recent.filter { $0.bucket.start >= newLookback.start }.count)
+  }
+
   @Test func lateWatchSyncReuploadsTheSameBucketWithTheNewTotal() async throws {
     let bucket = StepBucket(containing: now.addingTimeInterval(-7200))
     let harness = harness(totals: [StepBucketTotal(bucket: bucket, steps: 10)])

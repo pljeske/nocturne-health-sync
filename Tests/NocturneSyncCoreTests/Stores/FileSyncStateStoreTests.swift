@@ -17,7 +17,8 @@ import Testing
         uploadedCount: 7),
       stepBackfillCompletedThrough: now.addingTimeInterval(-86400),
       heartRateBackfillComplete: true,
-      heartRateBackfillStart: now.addingTimeInterval(-90 * 86400))
+      heartRateBackfillStart: now.addingTimeInterval(-90 * 86400),
+      stepLookbackSent: ["steps-1719828000-300": 42])
   }
 
   @Test func missingFileIsTheDefaultState() throws {
@@ -27,6 +28,7 @@ import Testing
     #expect(state.version == SyncState.currentVersion)
     #expect(state.heartRate.uploadedCount == 0)
     #expect(state.stepBackfillCompletedThrough == nil)
+    #expect(state.stepLookbackSent.isEmpty)
     #expect(!state.heartRateBackfillComplete)
   }
 
@@ -66,6 +68,9 @@ import Testing
             "occurredAt" : "2024-07-03T09:46:40Z"
           },
           "uploadedCount" : 7
+        },
+        "stepLookbackSent" : {
+          "steps-1719828000-300" : 42
         },
         "version" : 1
       }

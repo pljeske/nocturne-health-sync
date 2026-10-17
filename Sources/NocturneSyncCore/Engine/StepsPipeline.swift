@@ -3,8 +3,11 @@ import Foundation
 /// Steps: source-prioritised 5-minute bucket totals, never raw samples.
 ///
 /// Statistics queries have no anchor, so each run:
-/// 1. uploads every non-empty bucket of the lookback window `[now - 24 h, now)`. It writes no state;
-///    the server's upsert makes the re-upload idempotent, and it picks up late Watch syncs;
+/// 1. reads every bucket of the lookback window `[now - 24 h, now)` and uploads those whose total
+///    differs from what was last sent (`SyncState.stepLookbackSent`); an unchanged window costs no
+///    request and no disk write. The server's upsert makes any re-send idempotent, and the window
+///    picks up late Watch syncs. A user-requested run re-sends the whole window, so a loss on the
+///    server within the last day can always be repaired by hand;
 /// 2. uploads the backfill `[watermark, lookback start)` in one-day slices, oldest first, and moves the
 ///    watermark to each slice's end once every batch of that slice got a 2xx. The first run sets the
 ///    watermark to `now - 90 d`. After the initial backfill each run's slice is just the gap since the
@@ -54,8 +57,11 @@ public struct StepsPipeline: SyncPipeline {
   private func sync(_ context: SyncContext) async throws(PipelineStop) {
     var watermark = try await watermark(context)
     let lookback = StepWindows.lookback(now: context.now, hours: lookbackHours, bucketSeconds: bucketSeconds)
-    _ = try await upload(lookback, context)
+    try await uploadLookback(lookback, context)
 
+    let backfillStart = watermark
+    let backfillSpan = lookback.start.timeIntervalSince(backfillStart)
+    var progress = SyncProgress(type: .stepCount)
     while let slice = StepWindows.nextSlice(watermark: watermark, limit: lookback.start, sliceSeconds: sliceSeconds) {
       let uploaded = try await upload(slice, context)
       let end = slice.end
@@ -65,6 +71,10 @@ public struct StepsPipeline: SyncPipeline {
         throw .failed(error)
       }
       watermark = end
+      progress.uploaded += uploaded
+      progress.fractionCompleted = min(1, end.timeIntervalSince(backfillStart) / backfillSpan)
+      progress.reached = end
+      await context.reportProgress(progress)
     }
   }
 
@@ -83,19 +93,43 @@ public struct StepsPipeline: SyncPipeline {
     return initial
   }
 
-  /// Reads, maps and uploads one window. Returns the number of records sent; zero sends no request.
-  private func upload(_ window: DateInterval, _ context: SyncContext) async throws(PipelineStop) -> Int {
-    guard !Task.isCancelled else { throw .cancelled }
-    let totals: [StepBucketTotal]
+  /// The lookback window: only buckets whose total changed since the last send, unless the user asked
+  /// for this run. Remembers what was sent only after every batch succeeded.
+  private func uploadLookback(_ window: DateInterval, _ context: SyncContext) async throws(PipelineStop) {
+    let current = map(try await read(window, context), context)
+    let sent = await context.state().stepLookbackSent
+    let changed = context.userRequested ? current : current.filter { sent[$0.syncIdentifier] != $0.metric }
+    try await send(changed, context)
+
+    let latest = Dictionary(uniqueKeysWithValues: current.map { ($0.syncIdentifier, $0.metric) })
+    guard latest != sent else { return }
     do {
-      totals = try await context.health.stepTotals(in: window, bucketSeconds: bucketSeconds)
+      try await context.update { $0.stepLookbackSent = latest }
+    } catch {
+      throw .failed(error)
+    }
+  }
+
+  /// Reads, maps and uploads one backfill slice. Returns the number of records sent.
+  private func upload(_ window: DateInterval, _ context: SyncContext) async throws(PipelineStop) -> Int {
+    let records = map(try await read(window, context), context)
+    try await send(records, context)
+    return records.count
+  }
+
+  private func read(_ window: DateInterval, _ context: SyncContext) async throws(PipelineStop) -> [StepBucketTotal] {
+    guard !Task.isCancelled else { throw .cancelled }
+    do {
+      return try await context.health.stepTotals(in: window, bucketSeconds: bucketSeconds)
     } catch .databaseInaccessible {
       throw .deferred
     } catch {
       throw .failed(.health(error))
     }
+  }
 
-    let records = map(totals, context)
+  /// Uploads in batches; an empty array sends nothing.
+  private func send(_ records: [StepCountRecord], _ context: SyncContext) async throws(PipelineStop) {
     for chunk in records.chunks(ofCount: NocturneAPI.uploadChunkSize) {
       guard !Task.isCancelled else { throw .cancelled }
       let batch = Array(chunk)
@@ -109,7 +143,6 @@ public struct StepsPipeline: SyncPipeline {
         throw .failed(.upload(error))
       }
     }
-    return records.count
   }
 
   /// Maps totals to records, dropping zero buckets and skipping (and logging) unmappable ones.

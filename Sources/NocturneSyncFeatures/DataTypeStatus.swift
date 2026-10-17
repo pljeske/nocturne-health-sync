@@ -1,6 +1,16 @@
 import Foundation
 import NocturneSyncCore
 
+extension HealthDataType {
+  /// Display name.
+  public var title: String {
+    switch self {
+    case .heartRate: "Heart rate"
+    case .stepCount: "Steps"
+    }
+  }
+}
+
 /// One row of the status screen. Descriptive only: it reports what was synced, never interprets the
 /// values (this is not a medical device).
 public struct DataTypeStatus: Sendable, Equatable, Identifiable {
@@ -28,19 +38,12 @@ public struct DataTypeStatus: Sendable, Equatable, Identifiable {
       let status = state[type]
       return DataTypeStatus(
         type: type,
-        title: title(for: type),
+        title: type.title,
         lastSuccessfulSync: status.lastSuccessfulSync,
         uploadedCount: status.uploadedCount,
         lastError: status.lastError,
         backfill: backfill(for: type, in: state),
         noDataSeen: status.lastSuccessfulSync != nil && status.uploadedCount == 0)
-    }
-  }
-
-  static func title(for type: HealthDataType) -> String {
-    switch type {
-    case .heartRate: "Heart rate"
-    case .stepCount: "Steps"
     }
   }
 

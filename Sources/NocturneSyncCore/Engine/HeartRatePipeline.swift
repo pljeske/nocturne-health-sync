@@ -38,6 +38,7 @@ public struct HeartRatePipeline: SyncPipeline {
       throw .failed(error)
     }
     var anchorReset = false
+    var progress = SyncProgress(type: .heartRate)
 
     while true {
       guard !Task.isCancelled else { throw .cancelled }
@@ -84,6 +85,11 @@ public struct HeartRatePipeline: SyncPipeline {
         throw .failed(error)
       }
       anchor = page.anchor
+      progress.uploaded += records.count
+      if let newest = page.samples.map(\.date).max() {
+        progress.reached = max(progress.reached ?? newest, newest)
+      }
+      await context.reportProgress(progress)
       if drained { return }
     }
   }
