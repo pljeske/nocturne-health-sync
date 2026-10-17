@@ -15,7 +15,8 @@ import os
 /// - `HKStatisticsCollectionQueryDescriptor` with `.cumulativeSum` applies Health's source
 ///   prioritisation, so iPhone and Watch steps for the same minutes are not double-counted.
 /// - Statistics intervals are stepped from `anchorDate`. Using the bucket-aligned window start as the
-///   anchor and a fixed-second interval yields epoch-aligned buckets. Every bucket start is checked,
+///   anchor and a fixed interval in whole minutes (the unit Apple's examples use) yields epoch-aligned
+///   buckets. Every bucket start is checked,
 ///   and a misaligned one fails the query instead of producing wrong identifiers.
 /// - A locked device fails queries with `HKError.Code.errorDatabaseInaccessible`.
 /// - Unanswered `HKObserverQuery` deliveries make iOS throttle background delivery, so the completion
@@ -83,13 +84,14 @@ final class HealthKitSource: HealthSource {
     precondition(
       StepBucket(startingAt: interval.start, bucketSeconds: bucketSeconds) != nil,
       "interval.start must be bucket-aligned")
+    precondition(bucketSeconds.isMultiple(of: 60), "statistics intervals are expressed in whole minutes")
     // Overlap, not strict start: a sample that began before the window still contributes its share.
     let predicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end, options: [])
     let descriptor = HKStatisticsCollectionQueryDescriptor(
       predicate: .quantitySample(type: Self.quantityType(.stepCount), predicate: predicate),
       options: .cumulativeSum,
       anchorDate: interval.start,
-      intervalComponents: DateComponents(second: bucketSeconds))
+      intervalComponents: DateComponents(minute: bucketSeconds / 60))
 
     let collection: HKStatisticsCollection
     do {
@@ -149,11 +151,11 @@ final class HealthKitSource: HealthSource {
     }
   }
 
-  /// Heart rate as soon as possible. Steps hourly, which iOS enforces for step count anyway.
+  /// Hourly for both (decision 9). `.immediate` heart rate would relaunch the app in the background
+  /// on every Watch sync of a few samples, many times an hour; iOS caps step count at hourly anyway.
   private static func deliveryFrequency(_ type: HealthDataType) -> HKUpdateFrequency {
     switch type {
-    case .heartRate: .immediate
-    case .stepCount: .hourly
+    case .heartRate, .stepCount: .hourly
     }
   }
 

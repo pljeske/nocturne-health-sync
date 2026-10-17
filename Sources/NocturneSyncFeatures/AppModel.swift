@@ -21,7 +21,7 @@ public struct AppDependencies: Sendable {
     health: any HealthSource,
     backgroundScheduler: any BackgroundScheduling,
     callbackScheme: String,
-    backgroundRefreshInterval: TimeInterval = 3600,
+    backgroundRefreshInterval: TimeInterval = 4 * 3600,
     now: @escaping @Sendable () -> Date = Date.init,
     makeServices: @escaping @Sendable (URL) -> InstanceServices
   ) {
@@ -60,6 +60,7 @@ public final class AppModel {
   @ObservationIgnored private let dependencies: AppDependencies
   @ObservationIgnored private var cached: (url: URL, services: InstanceServices)?
   @ObservationIgnored private var observersStarted = false
+  @ObservationIgnored private var healthAccessRequested = false
   @ObservationIgnored private var runningSyncs = 0
   @ObservationIgnored private var eventListener: Task<Void, Never>?
 
@@ -207,7 +208,11 @@ public final class AppModel {
 
   // MARK: Health
 
+  /// Once per process: HealthKit shows its sheet only the first time anyway, and later calls still
+  /// cost a round trip to the Health daemon.
   private func requestHealthAccess() async {
+    guard !healthAccessRequested else { return }
+    healthAccessRequested = true
     do {
       try await dependencies.health.requestReadAuthorization()
     } catch {

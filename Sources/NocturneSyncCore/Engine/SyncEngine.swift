@@ -20,10 +20,21 @@ public actor SyncEngine {
     let task: Task<SyncReport, Never>
   }
 
+  /// The requests merged into one run.
+  private struct Request {
+    var types: Set<HealthDataType> = []
+    var userRequested = false
+
+    mutating func merge(_ reason: SyncReason) {
+      types.formUnion(reason.types)
+      if reason == .manual { userRequested = true }
+    }
+  }
+
   private var active: Run?
-  private var activeTypes: Set<HealthDataType> = []
+  private var activeRequest = Request()
   private var queued: Run?
-  private var queuedTypes: Set<HealthDataType> = []
+  private var queuedRequest = Request()
   private var lastRunID = 0
   /// Callers waiting on the queued run. Test observability only.
   private(set) var queuedRequestCount = 0
@@ -78,7 +89,7 @@ public actor SyncEngine {
   /// Runs (or joins a queued run of) the pipelines `reason` selects and returns that run's report.
   public func sync(reason: SyncReason) async -> SyncReport {
     if let queued {
-      queuedTypes.formUnion(reason.types)
+      queuedRequest.merge(reason)
       queuedRequestCount += 1
       return await queued.task.value
     }
@@ -90,12 +101,14 @@ public actor SyncEngine {
       return await self.execute(runID: id)
     }
     let run = Run(id: id, task: task)
+    var request = Request()
+    request.merge(reason)
     if active == nil {
       active = run
-      activeTypes = reason.types
+      activeRequest = request
     } else {
       queued = run
-      queuedTypes = reason.types
+      queuedRequest = request
       queuedRequestCount = 1
     }
     return await task.value
@@ -111,24 +124,24 @@ public actor SyncEngine {
   private func execute(runID: Int) async -> SyncReport {
     if let queued, queued.id == runID {
       active = queued
-      activeTypes = queuedTypes
+      activeRequest = queuedRequest
       self.queued = nil
-      queuedTypes = []
+      queuedRequest = Request()
       queuedRequestCount = 0
     }
     defer {
       if active?.id == runID {
         active = nil
-        activeTypes = []
+        activeRequest = Request()
       }
     }
-    return await performRun(types: activeTypes)
+    return await performRun(activeRequest)
   }
 
-  private func performRun(types: Set<HealthDataType>) async -> SyncReport {
+  private func performRun(_ request: Request) async -> SyncReport {
     let startedAt = now()
     var report = SyncReport(startedAt: startedAt, finishedAt: startedAt)
-    let selected = pipelines.filter { types.contains($0.type) }
+    let selected = pipelines.filter { request.types.contains($0.type) }
 
     do {
       _ = try loadStateIfNeeded()
@@ -147,8 +160,8 @@ public actor SyncEngine {
         break
       }
       let context = SyncContext(
-        type: type, health: health, client: client, now: startedAt, timeZone: zone, app: app, retrier: retrier,
-        engine: self)
+        type: type, health: health, client: client, now: startedAt, timeZone: zone, app: app,
+        userRequested: request.userRequested, retrier: retrier, engine: self)
       eventSink.yield(.started(type))
       let result = record(await pipeline.run(context), for: type)
       eventSink.yield(.finished(type))

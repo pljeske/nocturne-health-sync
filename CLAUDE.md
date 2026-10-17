@@ -116,7 +116,9 @@ before any engine runs). Anchors and sync state live in a directory per instance
   (registrations do not survive reinstalls). Always call the observer's completion handler,
   including on failure, or iOS throttles further deliveries.
 - Do not assume delivery frequency. iOS caps some types (step count among them) at hourly
-  regardless of the requested frequency.
+  regardless of the requested frequency. Both types request `.hourly` (decision 9).
+- Pipelines run steps first, then heart rate: the cheap pass finishes before a long backfill that a
+  background time limit may cut short.
 - The HealthKit store is unreadable while the device is locked. Treat
   `HKError.errorDatabaseInaccessible` as "retry later": do not advance anchors, do not surface
   an error.
@@ -151,9 +153,11 @@ before any engine runs). Anchors and sync state live in a directory per instance
   is part of the identifier, changing it after first release creates a second series that the
   server sums alongside the old one. Treat it like `dataSource`: fixed forever.
 - Statistics queries have no anchor. Instead, each sync recomputes a rolling 24 h lookback window
-  and re-uploads every non-empty bucket in it. Upsert-by-syncIdentifier makes this idempotent; the
-  lookback covers late Watch syncs. The only persisted step state is "backfill completed up to"
-  (in `SyncStateStore`).
+  and re-uploads the non-empty buckets in it whose total differs from the last send
+  (`SyncState.stepLookbackSent`, replaced after each lookback upload); an unchanged window costs no
+  request and no disk write. A user-requested run (`SyncContext.userRequested`, from "Sync now")
+  re-sends the whole window. Upsert-by-syncIdentifier makes every re-send idempotent; the lookback
+  covers late Watch syncs. Persisted step state: the backfill watermark and that map.
 - Each run: the lookback window first (no state written), then the backfill `[watermark, lookback
   start)` in one-day (86 400 s) slices, oldest first, committing the watermark after each slice
   until caught up or cancelled. Every boundary is an epoch-aligned bucket start; local time never
@@ -242,6 +246,10 @@ client, and record the Nocturne version tested against in `docs/compat.md`.
   sample date only, since anchor order gives no total. One consumer: `AppModel`.
 - Runs never overlap. A request during a run queues one follow-up; later requests join it. An
   observer trigger runs only its type; launch, manual and background refresh run all types.
+- Resource budget: the app does nothing on its own. It runs only when iOS wakes it (hourly Health
+  delivery, or the `BGAppRefreshTask` fallback requested 4 h out after each run) or the user opens
+  it; a run with nothing new makes no request and writes no file beyond the status timestamp; no
+  timers, polling, or open connections. Health access is requested once per process.
 - A failure that is not type-specific (signed out, 401 after refresh, setup/recovery gate, no
   network, 429, locked device, local storage) ends the whole run; others end only that type.
 - A sample that cannot be mapped (NaN, negative, out of range) is skipped and logged, never
@@ -290,5 +298,11 @@ Decided 2026-10-16:
    long idle period; nothing older than the original backfill start is ever uploaded.
 8. Step records carry `device` = `"Apple Health"`: the value is Health's merged total, not one
    device's reading. Not part of the dedup key, so it can change without duplicating data.
+
+Decided 2026-10-17:
+
+9. Heart rate background delivery is `.hourly`, not `.immediate`. Immediate would relaunch the app
+   in the background on every Watch sync of a few samples, many times an hour, for data that is
+   viewed retrospectively. Costs up to an hour of latency; one line to revert.
 
 No decisions are currently open.

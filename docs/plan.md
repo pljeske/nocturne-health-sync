@@ -173,7 +173,8 @@ Implemented as `AppModel` in the `NocturneSyncFeatures` package target (tested o
 fakes) plus thin glue in the iOS target (`AppDelegate`, `BackgroundRefresh`, `LiveEnvironment`).
 
 - On every launch: request authorization if not yet requested, `enableBackgroundDelivery` for
-  both types (`.immediate` for heart rate, `.hourly` for steps, knowing iOS caps steps anyway),
+  both types (`.hourly` for both, decision 9; `.immediate` heart rate would relaunch the app on every
+  Watch sync),
   register observer queries whose handler calls `engine.sync(reason: .observer)` and always
   calls the completion handler, including when the sync throws.
 - `BGAppRefreshTask` registration as fallback; reschedule after each run; set the task's

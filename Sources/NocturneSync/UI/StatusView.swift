@@ -42,7 +42,7 @@ struct StatusView: View {
         }
       } footer: {
         Text(
-          "iOS decides when background syncs run. Heart rate usually arrives within minutes; steps at most hourly."
+          "iOS decides when background syncs run, about hourly when there is new data. Sync now also re-sends the last day of steps."
         )
       }
     }

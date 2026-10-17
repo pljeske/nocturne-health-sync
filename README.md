@@ -15,9 +15,13 @@ Not a medical device. The app shows what was synced and when, never the values t
 | Step count | `POST /api/v4/StepCount` | Health's own total per 5-minute bucket, so iPhone and Watch steps are not counted twice. |
 
 The first sync uploads the last 90 days, oldest steps first. After that, new data is uploaded as
-iOS delivers it: heart rate usually within minutes, steps at most hourly (an iOS limit). Each run
-also re-sends the last 24 hours of step buckets to pick up late Watch syncs. Every record carries a
-stable identifier, so re-sending never creates duplicates on the server.
+iOS delivers it, about hourly for both. Each run re-checks the last 24 hours of step buckets and
+re-sends only those whose total changed, which picks up late Watch syncs; **Sync now** re-sends
+the whole day. Every record carries a stable identifier, so re-sending never creates duplicates on
+the server.
+
+The app is built to stay light: it wakes about once an hour when new data exists, does nothing
+when nothing changed (no request, no disk write), and keeps no timers or connections open.
 
 ## Requirements
 
@@ -45,7 +49,7 @@ the bundle id automatically.
 2. Allow read access to Heart Rate and Steps when iOS asks.
 3. The status screen shows, per data type, the last successful sync, how many records were uploaded,
    how far the history upload has got, and the last error, if any. **Sync now** (or pull to refresh)
-   syncs immediately.
+   syncs immediately and re-sends the whole last day of steps.
    While a sync runs, **Syncing now** shows live progress per data type, updated after every
    uploaded batch: a progress bar for steps, and for heart rate a running count with the newest
    record reached (HealthKit gives no total for heart rate, so there is no percentage).

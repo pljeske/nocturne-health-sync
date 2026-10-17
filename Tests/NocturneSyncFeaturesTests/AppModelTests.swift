@@ -61,6 +61,16 @@ import Testing
     #expect(harness.scheduler.scheduled == [Fixtures.now.addingTimeInterval(3600)])
   }
 
+  @Test func healthAccessIsRequestedOncePerProcess() async {
+    let harness = ModelHarness()
+    await harness.model.launch()
+    await harness.model.becameActive()
+    await harness.model.becameActive()
+    await harness.model.becameActive()
+    #expect(await harness.health.authorizationRequests == 1)
+    #expect(await harness.sync.reasons.count == 3)
+  }
+
   @Test func becomingActiveWhileSignedOutDoesNothing() async {
     let harness = ModelHarness(signedIn: false)
     await harness.model.launch()

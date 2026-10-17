@@ -130,6 +130,29 @@ final class Invocations: Sendable {
     #expect(invocations.all == [.heartRate, .heartRate, .stepCount, .stepCount])
   }
 
+  @Test func userRequestedFollowsTheManualReasonThroughCoalescing() async throws {
+    let gate = Gate()
+    let seen = Mutex<[Bool]>([])
+    let blocking = StubPipeline(type: .heartRate) { context in
+      seen.withLock { $0.append(context.userRequested) }
+      if seen.withLock({ $0.count }) == 1 { await gate.wait() }
+      return .completed
+    }
+    let harness = EngineHarness(pipelines: [blocking])
+    let engine = harness.engine
+
+    async let first = engine.sync(reason: .healthChange(.heartRate))
+    try await eventually { await gate.waiting == 1 }
+    async let second = engine.sync(reason: .healthChange(.heartRate))
+    try await eventually { await engine.queuedRequestCount == 1 }
+    async let third = engine.sync(reason: .manual)
+    try await eventually { await engine.queuedRequestCount == 2 }
+    await gate.open()
+    _ = await [first, second, third]
+
+    #expect(seen.withLock { $0 } == [false, true])
+  }
+
   @Test func cancelCurrentRunStopsAtTheNextBoundary() async throws {
     let gate = Gate()
     let invocations = Invocations()

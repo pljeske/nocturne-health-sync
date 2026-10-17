@@ -47,13 +47,19 @@ public struct SyncState: Sendable, Hashable, Codable {
   /// Lower bound of every heart rate query, persisted by the first run as `now - 90 d` and never moved
   /// (decision 7). `nil` until that first run.
   public var heartRateBackfillStart: Date?
+  /// The step total last sent for each bucket of the lookback window, by `syncIdentifier`. A run
+  /// re-sends only buckets whose total differs, so an unchanged window costs no request. Replaced
+  /// wholesale after each lookback upload, which prunes buckets that left the window. A manual sync
+  /// ignores it and re-sends the whole window.
+  public var stepLookbackSent: [String: Int]
 
   public init(
     heartRate: TypeStatus = TypeStatus(),
     stepCount: TypeStatus = TypeStatus(),
     stepBackfillCompletedThrough: Date? = nil,
     heartRateBackfillComplete: Bool = false,
-    heartRateBackfillStart: Date? = nil
+    heartRateBackfillStart: Date? = nil,
+    stepLookbackSent: [String: Int] = [:]
   ) {
     self.version = Self.currentVersion
     self.heartRate = heartRate
@@ -61,6 +67,25 @@ public struct SyncState: Sendable, Hashable, Codable {
     self.stepBackfillCompletedThrough = stepBackfillCompletedThrough
     self.heartRateBackfillComplete = heartRateBackfillComplete
     self.heartRateBackfillStart = heartRateBackfillStart
+    self.stepLookbackSent = stepLookbackSent
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case version, heartRate, stepCount, stepBackfillCompletedThrough, heartRateBackfillComplete
+    case heartRateBackfillStart, stepLookbackSent
+  }
+
+  /// Fields added after the first release are optional on read, so a file written by an older build
+  /// loads with their defaults instead of failing as corrupt.
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    version = try container.decode(Int.self, forKey: .version)
+    heartRate = try container.decode(TypeStatus.self, forKey: .heartRate)
+    stepCount = try container.decode(TypeStatus.self, forKey: .stepCount)
+    stepBackfillCompletedThrough = try container.decodeIfPresent(Date.self, forKey: .stepBackfillCompletedThrough)
+    heartRateBackfillComplete = try container.decode(Bool.self, forKey: .heartRateBackfillComplete)
+    heartRateBackfillStart = try container.decodeIfPresent(Date.self, forKey: .heartRateBackfillStart)
+    stepLookbackSent = try container.decodeIfPresent([String: Int].self, forKey: .stepLookbackSent) ?? [:]
   }
 
   public subscript(type: HealthDataType) -> TypeStatus {
