@@ -7,6 +7,7 @@ extension HealthDataType {
     switch self {
     case .heartRate: "Heart rate"
     case .stepCount: "Steps"
+    case .sleep: "Sleep"
     }
   }
 }
@@ -16,8 +17,8 @@ extension HealthDataType {
 public struct DataTypeStatus: Sendable, Equatable, Identifiable {
   public enum Backfill: Sendable, Equatable {
     case notStarted
-    /// Steps report how far back history is uploaded; heart rate cannot (anchor order is not date
-    /// order), so `through` is nil.
+    /// Steps and sleep report how far back history is uploaded; heart rate cannot (anchor order is not
+    /// date order), so `through` is nil.
     case inProgress(through: Date?)
     case complete
   }
@@ -57,6 +58,14 @@ public struct DataTypeStatus: Sendable, Equatable, Identifiable {
       // A successful run leaves the watermark at its lookback start, 24 h before the run began. An
       // hour of slack covers the run's own duration.
       if let last = state.stepCount.lastSuccessfulSync, last.timeIntervalSince(watermark) <= 25 * 3600 {
+        return .complete
+      }
+      return .inProgress(through: watermark)
+    case .sleep:
+      guard let watermark = state.sleepBackfillCompletedThrough else { return .notStarted }
+      // A successful run leaves the watermark at its lookback start, two sleep days before the
+      // run's own day: at most about three days before the run. A fourth day covers DST and slack.
+      if let last = state.sleep.lastSuccessfulSync, last.timeIntervalSince(watermark) <= 4 * 86_400 {
         return .complete
       }
       return .inProgress(through: watermark)

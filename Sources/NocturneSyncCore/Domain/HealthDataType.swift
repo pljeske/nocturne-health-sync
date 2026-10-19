@@ -3,4 +3,5 @@
 public enum HealthDataType: String, Sendable, Hashable, Codable, CaseIterable {
   case heartRate
   case stepCount
+  case sleep
 }

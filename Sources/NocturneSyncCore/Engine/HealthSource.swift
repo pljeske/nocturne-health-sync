@@ -52,6 +52,10 @@ public protocol HealthSource: Sendable {
   /// are omitted; buckets whose total is zero may be returned.
   func stepTotals(in interval: DateInterval, bucketSeconds: Int) async throws(HealthSourceError) -> [StepBucketTotal]
 
+  /// Every sleep sample of every source and stage that overlaps `interval`, ordered by start. Sleep has
+  /// no anchor: the pipeline re-reads a window and rebuilds its sessions from scratch.
+  func sleepSamples(overlapping interval: DateInterval) async throws(HealthSourceError) -> [SleepSample]
+
   /// Registers background delivery for `type`. Must be called at every launch.
   func enableBackgroundDelivery(for type: HealthDataType) async throws(HealthSourceError)
 

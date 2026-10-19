@@ -100,7 +100,8 @@ actor FakeSyncService: SyncService {
       holdNext = false
       await withCheckedContinuation { gate = $0 }
     }
-    return reports.isEmpty ? Fixtures.report([.heartRate: .completed, .stepCount: .completed]) : reports.removeFirst()
+    return reports.isEmpty
+      ? Fixtures.report([.heartRate: .completed, .stepCount: .completed, .sleep: .completed]) : reports.removeFirst()
   }
 
   func cancelCurrentRun() async { cancelCount += 1 }
@@ -134,6 +135,11 @@ actor FakeHealth: HealthSource {
   }
 
   func stepTotals(in interval: DateInterval, bucketSeconds: Int) async throws(HealthSourceError) -> [StepBucketTotal] {
+    Issue.record("the app model must not query Health directly")
+    return []
+  }
+
+  func sleepSamples(overlapping interval: DateInterval) async throws(HealthSourceError) -> [SleepSample] {
     Issue.record("the app model must not query Health directly")
     return []
   }

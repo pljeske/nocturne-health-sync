@@ -4,7 +4,7 @@
 them back. It checks the contract that unit tests can only assume:
 
 - the request bodies are accepted;
-- re-uploading the same `syncIdentifier` updates the row in place;
+- re-uploading the same `syncIdentifier` (or, for sleep, `originalId`) updates the row in place;
 - more than one request's worth of records is chunked and stored;
 - an invalid token comes back as `unauthorized`.
 

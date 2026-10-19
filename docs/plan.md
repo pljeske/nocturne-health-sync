@@ -206,6 +206,24 @@ Views in the iOS target bind to `AppModel`; status rows (`DataTypeStatus`), addr
 - README: install, sign in, what "verified on device" means, known gaps (deletions both
   directions, zeroed buckets).
 
+### 11. Sleep pipeline (`Domain/SleepSessions.swift`, `Engine/SleepPipeline.swift`)
+
+Added 2026-10-19 on request (decisions 10 to 13 in `CLAUDE.md`).
+
+- `SleepSample`/`SleepStage` mirror `sleepAnalysis` category samples; `SleepSessionRecord` mirrors
+  Nocturne's `SleepSession` with stage intervals. `SleepDays` does the local-noon day arithmetic;
+  `SleepSessionBuilder` groups samples of every source by a 1 h gap, names sessions
+  `sleep-<day>-<n>`, and picks the day's longest as the overnight sleep.
+- `SleepPipeline` mirrors the steps pipeline: a lookback window (current sleep day plus two) sent
+  only when a session's content digest changed, then a day-at-a-time backfill with a committed
+  watermark. Windows are read with a 24 h margin on both sides so sessions are grouped whole.
+- `HTTPNocturneClient.uploadSleepSessions` posts `api/v4/sleep/sessions/bulk` in chunks of 20.
+- `HealthKitSource.sleepSamples(overlapping:)` is an `HKSampleQueryDescriptor` over the category
+  type; background delivery and the observer use the same `.hourly` registration as the other types.
+- Tests: day boundaries across both US DST transitions, grouping and naming, totals, digest
+  stability, lookback change detection, renumbering when a nap appears late, watermark commit only
+  on success, cancellation, deferral while locked, and the request JSON golden.
+
 ## Cross-cutting rules applied in every step
 
 - `swift format` before commit. Swift Testing only. `os.Logger` with subsystem per module,

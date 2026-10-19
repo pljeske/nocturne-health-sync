@@ -32,3 +32,45 @@ public struct StepBucketTotal: Sendable, Hashable {
     self.steps = steps
   }
 }
+
+/// One `sleepAnalysis` category sample: a contiguous interval in one sleep state, as recorded by one
+/// source. Produced by `HealthSource`; `SleepSessionBuilder` groups them into sessions.
+public struct SleepSample: Sendable, Hashable {
+  /// `HKObject.uuid`. Not part of any server identity; a session is named by its day, not its samples.
+  public var id: UUID
+  public var start: Date
+  public var end: Date
+  public var stage: SleepStage
+  /// `HKMetadataKeyTimeZone`, when the recording app set it.
+  public var timeZoneIdentifier: String?
+  /// Name of the recording device or source.
+  public var device: String
+  /// `HKMetadataKeyWasUserEntered`: typed into Health rather than recorded by a device.
+  public var wasUserEntered: Bool
+
+  public init(
+    id: UUID, start: Date, end: Date, stage: SleepStage, timeZoneIdentifier: String? = nil, device: String,
+    wasUserEntered: Bool = false
+  ) {
+    self.id = id
+    self.start = start
+    self.end = end
+    self.stage = stage
+    self.timeZoneIdentifier = timeZoneIdentifier
+    self.device = device
+    self.wasUserEntered = wasUserEntered
+  }
+}
+
+/// `HKCategoryValueSleepAnalysis`, decoupled from HealthKit so the core builds without it.
+public enum SleepStage: Sendable, Hashable, CaseIterable {
+  case inBed
+  case asleepUnspecified
+  case awake
+  case asleepCore
+  case asleepDeep
+  case asleepREM
+  /// A value this build does not know (a stage added by a later iOS). Kept rather than dropped so the
+  /// session has no hole; uploaded as Nocturne's `Unknown` stage.
+  case unknown
+}

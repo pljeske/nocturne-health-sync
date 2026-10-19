@@ -24,6 +24,30 @@ import Testing
     #expect(String(decoding: data, as: UTF8.self) == expected)
   }
 
+  @Test func sleepSessionJSONMatchesContract() throws {
+    let data = try RequestEncoder.encode([SleepSessionRequestBody(Fixtures.sleepSession())])
+    let expected = """
+      [{"deepSleepMs":1800000,"detectionMethod":"Auto","durationMs":5400000,"endTime":"2024-07-01T11:30:00.250Z",\
+      "isMainSleep":true,"lightSleepMs":1800000,"originalId":"sleep-2024-07-01-0","remSleepMs":0,"source":"Apple",\
+      "sourceApp":"NocturneSync","sourceDevice":"Apple Health","stages":[\
+      {"endTime":"2024-07-01T11:30:00.250Z","ordinal":0,"stage":"InBed","startTime":"2024-07-01T10:00:00.250Z"},\
+      {"endTime":"2024-07-01T10:30:00.250Z","ordinal":1,"stage":"Light","startTime":"2024-07-01T10:00:00.250Z"},\
+      {"endTime":"2024-07-01T11:00:00.250Z","ordinal":2,"stage":"Deep","startTime":"2024-07-01T10:30:00.250Z"},\
+      {"endTime":"2024-07-01T11:30:00.250Z","ordinal":3,"stage":"Awake","startTime":"2024-07-01T11:00:00.250Z"}],\
+      "startTime":"2024-07-01T10:00:00.250Z","timezone":"Europe/Berlin","totalAwakeMs":1800000,\
+      "totalSleepMs":3600000,"type":"Overnight"}]
+      """
+    #expect(String(decoding: data, as: UTF8.self) == expected)
+  }
+
+  @Test func undifferentiatedSleepOmitsStageTotals() throws {
+    var record = Fixtures.sleepSession()
+    record.stages = [.init(start: record.start, end: record.end, stage: .asleep)]
+    let json = String(decoding: try RequestEncoder.encode([SleepSessionRequestBody(record)]), as: UTF8.self)
+    #expect(!json.contains("deepSleepMs") && !json.contains("lightSleepMs") && !json.contains("remSleepMs"))
+    #expect(json.contains("\"totalSleepMs\":5400000"))
+  }
+
   @Test(arguments: [
     (0, "2024-07-01T10:00:00.250Z"),
     (60, "2024-07-01T11:00:00.250+01:00"),

@@ -20,7 +20,7 @@ import Testing
     let body = try #require(JSONSerialization.jsonObject(with: request.httpBody!) as? [String: Any])
     #expect(body["client_name"] as? String == "NocturneSync")
     #expect(body["redirect_uris"] as? [String] == ["com.pljeske.NocturneSync://oauth/callback"])
-    #expect(body["scope"] as? String == "heartrate.readwrite stepcount.readwrite")
+    #expect(body["scope"] as? String == "heartrate.readwrite stepcount.readwrite sleep.readwrite")
     #expect(body["software_id"] as? String == "com.pljeske.NocturneSync")
     #expect(body["software_version"] as? String == "0.1.0")
     #expect(body.count == 5)
@@ -68,7 +68,7 @@ import Testing
         "response_type": "code",
         "client_id": "client-abc",
         "redirect_uri": "com.pljeske.NocturneSync://oauth/callback",
-        "scope": "heartrate.readwrite stepcount.readwrite",
+        "scope": "heartrate.readwrite stepcount.readwrite sleep.readwrite",
         "state": "st4te",
         "code_challenge": "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
         "code_challenge_method": "S256",
@@ -99,7 +99,7 @@ import Testing
     #expect(tokens.accessToken == "access-1")
     #expect(tokens.refreshToken == "refresh-1")
     #expect(tokens.expiresAt == AuthFixtures.now.addingTimeInterval(3600))
-    #expect(tokens.scope == "heartrate.readwrite stepcount.readwrite")
+    #expect(tokens.scope == "heartrate.readwrite stepcount.readwrite sleep.readwrite")
   }
 
   @Test func refreshPostsFormEncodedRefreshGrant() async throws {

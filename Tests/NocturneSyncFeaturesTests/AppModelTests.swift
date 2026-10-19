@@ -24,8 +24,8 @@ import Testing
     await harness.model.launch()
 
     #expect(harness.model.phase == .signedIn(instance: Fixtures.instance))
-    #expect(await harness.health.deliveryEnabled == [.heartRate, .stepCount])
-    #expect(await harness.health.observedTypes == [.heartRate, .stepCount])
+    #expect(await harness.health.deliveryEnabled == [.heartRate, .stepCount, .sleep])
+    #expect(await harness.health.observedTypes == [.heartRate, .sleep, .stepCount])
     #expect(harness.model.statuses.first { $0.type == .heartRate }?.uploadedCount == 5)
     // A launch alone does not sync: background launches are for delivery, foreground calls becameActive.
     #expect(await harness.sync.reasons.isEmpty)
@@ -49,7 +49,7 @@ import Testing
     let harness = ModelHarness()
     await harness.model.launch()
     await harness.model.launch()
-    #expect(await harness.health.deliveryEnabled == [.heartRate, .stepCount])
+    #expect(await harness.health.deliveryEnabled == [.heartRate, .stepCount, .sleep])
   }
 
   @Test func becomingActiveAsksForHealthAccessAndSyncsEverything() async {
@@ -100,7 +100,7 @@ import Testing
         .begin, .complete(URL(string: "com.pljeske.NocturneSync://oauth/callback?code=c0de&state=st4te")!),
       ])
     #expect(await harness.health.authorizationRequests == 1)
-    #expect(await harness.health.observedTypes == [.heartRate, .stepCount])
+    #expect(await harness.health.observedTypes == [.heartRate, .sleep, .stepCount])
     #expect(await harness.sync.reasons == [.launch])
     #expect(!harness.model.isSigningIn)
     #expect(harness.model.message == nil)

@@ -26,6 +26,7 @@ public struct SyncState: Sendable, Hashable, Codable {
     /// Records in committed batches since install. Heart rate: counted when the page's anchor is
     /// committed, so a re-upload after an anchor reset counts again. Steps: counted when the backfill
     /// watermark passes the bucket, so each bucket counts once; lookback re-uploads are not counted.
+    /// Sleep: sessions, counted like steps.
     public var uploadedCount: Int
 
     public init(lastSuccessfulSync: Date? = nil, lastError: Failure? = nil, uploadedCount: Int = 0) {
@@ -38,6 +39,7 @@ public struct SyncState: Sendable, Hashable, Codable {
   public var version: Int
   public var heartRate: TypeStatus
   public var stepCount: TypeStatus
+  public var sleep: TypeStatus
   /// Step buckets older than this have been uploaded by the backfill. `nil` until the first run sets
   /// it to `now - 90 d`; the backfill is complete once it reaches the start of the lookback window.
   public var stepBackfillCompletedThrough: Date?
@@ -52,27 +54,39 @@ public struct SyncState: Sendable, Hashable, Codable {
   /// wholesale after each lookback upload, which prunes buckets that left the window. A manual sync
   /// ignores it and re-sends the whole window.
   public var stepLookbackSent: [String: Int]
+  /// Sleep days starting before this have been uploaded by the backfill. `nil` until the first run
+  /// sets it to the day start 90 days back; complete once it reaches the lookback start.
+  public var sleepBackfillCompletedThrough: Date?
+  /// The content digest last sent for each sleep session of the lookback window, by `originalId`.
+  /// Same role and lifecycle as `stepLookbackSent`.
+  public var sleepLookbackSent: [String: String]
 
   public init(
     heartRate: TypeStatus = TypeStatus(),
     stepCount: TypeStatus = TypeStatus(),
+    sleep: TypeStatus = TypeStatus(),
     stepBackfillCompletedThrough: Date? = nil,
     heartRateBackfillComplete: Bool = false,
     heartRateBackfillStart: Date? = nil,
-    stepLookbackSent: [String: Int] = [:]
+    stepLookbackSent: [String: Int] = [:],
+    sleepBackfillCompletedThrough: Date? = nil,
+    sleepLookbackSent: [String: String] = [:]
   ) {
     self.version = Self.currentVersion
     self.heartRate = heartRate
     self.stepCount = stepCount
+    self.sleep = sleep
     self.stepBackfillCompletedThrough = stepBackfillCompletedThrough
     self.heartRateBackfillComplete = heartRateBackfillComplete
     self.heartRateBackfillStart = heartRateBackfillStart
     self.stepLookbackSent = stepLookbackSent
+    self.sleepBackfillCompletedThrough = sleepBackfillCompletedThrough
+    self.sleepLookbackSent = sleepLookbackSent
   }
 
   private enum CodingKeys: String, CodingKey {
     case version, heartRate, stepCount, stepBackfillCompletedThrough, heartRateBackfillComplete
-    case heartRateBackfillStart, stepLookbackSent
+    case heartRateBackfillStart, stepLookbackSent, sleep, sleepBackfillCompletedThrough, sleepLookbackSent
   }
 
   /// Fields added after the first release are optional on read, so a file written by an older build
@@ -86,6 +100,9 @@ public struct SyncState: Sendable, Hashable, Codable {
     heartRateBackfillComplete = try container.decode(Bool.self, forKey: .heartRateBackfillComplete)
     heartRateBackfillStart = try container.decodeIfPresent(Date.self, forKey: .heartRateBackfillStart)
     stepLookbackSent = try container.decodeIfPresent([String: Int].self, forKey: .stepLookbackSent) ?? [:]
+    sleep = try container.decodeIfPresent(TypeStatus.self, forKey: .sleep) ?? TypeStatus()
+    sleepBackfillCompletedThrough = try container.decodeIfPresent(Date.self, forKey: .sleepBackfillCompletedThrough)
+    sleepLookbackSent = try container.decodeIfPresent([String: String].self, forKey: .sleepLookbackSent) ?? [:]
   }
 
   public subscript(type: HealthDataType) -> TypeStatus {
@@ -93,12 +110,14 @@ public struct SyncState: Sendable, Hashable, Codable {
       switch type {
       case .heartRate: heartRate
       case .stepCount: stepCount
+      case .sleep: sleep
       }
     }
     set {
       switch type {
       case .heartRate: heartRate = newValue
       case .stepCount: stepCount = newValue
+      case .sleep: sleep = newValue
       }
     }
   }

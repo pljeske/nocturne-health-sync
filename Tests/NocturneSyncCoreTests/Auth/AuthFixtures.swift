@@ -26,14 +26,14 @@ enum AuthFixtures {
     let refreshField = refresh.map { ",\"refresh_token\":\"\($0)\"" } ?? ""
     return """
       {"access_token":"\(access)","token_type":"Bearer","expires_in":\(expiresIn)\(refreshField),\
-      "scope":"heartrate.readwrite stepcount.readwrite"}
+      "scope":"heartrate.readwrite stepcount.readwrite sleep.readwrite"}
       """
   }
 
   static let registrationJSON = """
     {"client_id":"client-abc","client_id_issued_at":1720000000,"client_name":"NocturneSync",\
     "redirect_uris":["com.pljeske.NocturneSync://oauth/callback"],"grant_types":["authorization_code","refresh_token"],\
-    "response_types":["code"],"token_endpoint_auth_method":"none","scope":"heartrate.readwrite stepcount.readwrite",\
+    "response_types":["code"],"token_endpoint_auth_method":"none","scope":"heartrate.readwrite stepcount.readwrite sleep.readwrite",\
     "software_id":"com.pljeske.NocturneSync"}
     """
 
