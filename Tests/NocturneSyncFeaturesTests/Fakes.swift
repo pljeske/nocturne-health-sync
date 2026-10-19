@@ -144,6 +144,11 @@ actor FakeHealth: HealthSource {
     return []
   }
 
+  func biometricSamples(in interval: DateInterval) async throws(HealthSourceError) -> [BiometricSample] {
+    Issue.record("the app model must not query Health directly")
+    return []
+  }
+
   func enableBackgroundDelivery(for type: HealthDataType) async throws(HealthSourceError) {
     deliveryEnabled.append(type)
   }

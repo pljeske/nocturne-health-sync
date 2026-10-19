@@ -56,6 +56,11 @@ public protocol HealthSource: Sendable {
   /// no anchor: the pipeline re-reads a window and rebuilds its sessions from scratch.
   func sleepSamples(overlapping interval: DateInterval) async throws(HealthSourceError) -> [SleepSample]
 
+  /// Every heart rate, HRV, respiratory rate and SpO2 reading of every source whose start lies in
+  /// `interval`, in Health's units (see `BiometricSample.Kind`), ordered by start. Read per sleep
+  /// session, so the interval is a night, not a window with daytime workouts in it.
+  func biometricSamples(in interval: DateInterval) async throws(HealthSourceError) -> [BiometricSample]
+
   /// Registers background delivery for `type`. Must be called at every launch.
   func enableBackgroundDelivery(for type: HealthDataType) async throws(HealthSourceError)
 

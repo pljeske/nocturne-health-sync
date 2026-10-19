@@ -63,6 +63,11 @@ struct SleepSessionRequestBody: Encodable, Equatable {
   var deepSleepMs: Int?
   var lightSleepMs: Int?
   var remSleepMs: Int?
+  var avgHeartRate: Double?
+  var minHeartRate: Double?
+  var avgHrv: Double?
+  var avgBreathRate: Double?
+  var avgSpo2: Double?
   var source: String
   var sourceDevice: String
   var sourceApp: String
@@ -82,6 +87,11 @@ struct SleepSessionRequestBody: Encodable, Equatable {
     deepSleepMs = record.deepSleepMs
     lightSleepMs = record.lightSleepMs
     remSleepMs = record.remSleepMs
+    avgHeartRate = record.biometrics.averageHeartRate
+    minHeartRate = record.biometrics.minimumHeartRate
+    avgHrv = record.biometrics.averageHRV
+    avgBreathRate = record.biometrics.averageRespiratoryRate
+    avgSpo2 = record.biometrics.averageOxygenSaturation
     source = record.source
     sourceDevice = record.device
     sourceApp = record.app

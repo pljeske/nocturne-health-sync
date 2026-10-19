@@ -13,7 +13,7 @@ Not a medical device. The app shows what was synced and when, never the values t
 | --- | --- | --- |
 | Heart rate | `POST /api/v4/HeartRate` | Every sample, as recorded (workouts included, no downsampling). |
 | Step count | `POST /api/v4/StepCount` | Health's own total per 5-minute bucket, so iPhone and Watch steps are not counted twice. |
-| Sleep | `POST /api/v4/sleep/sessions/bulk` | One session per night or nap, with every stage interval Health has (Watch stages, iPhone "in bed"). |
+| Sleep | `POST /api/v4/sleep/sessions/bulk` | One session per night or nap, with every stage interval Health has (Watch stages, iPhone "in bed"), plus average and minimum heart rate and average HRV, breathing rate and blood oxygen while asleep. |
 
 The first sync uploads the last 90 days, oldest steps and nights first. After that, new data is
 uploaded as iOS delivers it, about hourly. Each run re-checks the last 24 hours of step buckets and
@@ -49,7 +49,9 @@ the bundle id automatically.
    `heartrate.readwrite`, `stepcount.readwrite` and `sleep.readwrite` access it asks for; it asks for
    nothing else. (Signed in before sleep was added? Sign out and in again to grant the new scope;
    until then the sleep row shows "denied access".)
-2. Allow read access to Heart Rate, Steps and Sleep when iOS asks.
+2. Allow read access to Heart Rate, Steps, Sleep, Heart Rate Variability, Respiratory Rate and
+   Blood Oxygen when iOS asks. The last three are used only for the sleep summaries; a type left off
+   simply leaves its field empty.
 3. The status screen shows, per data type, the last successful sync, how many records were uploaded,
    how far the history upload has got, and the last error, if any. **Sync now** (or pull to refresh)
    syncs immediately and re-sends the whole last day of steps.
@@ -78,7 +80,11 @@ A sign-in lasts as long as the app syncs at least every 90 days. After a longer 
   the last one orphaned on the server. Delete it in Nocturne; the app will not recreate it. Changing
   time zones shifts the day boundaries, which can rename sessions near noon.
 - **Sleep from iPhone only is "in bed".** Without a Watch (or another stage source), Health records
-  only in-bed time, which Nocturne stores as a session with zero sleep, as Health shows it.
+  only in-bed time, which Nocturne stores as a session with zero sleep, as Health shows it, and
+  without biometrics.
+- **Sleep biometrics depend on the Watch.** HRV, breathing rate and blood oxygen appear only when the
+  Watch recorded them while asleep; blood oxygen availability depends on the Watch model, region and
+  settings. A reading that reaches Health more than about three days after the night is not added.
 - **Time zones while travelling.** Heart rate samples rarely carry their own time zone, so local
   time comes from the phone's current time zone. History uploaded after crossing zones is labelled
   with the new zone.

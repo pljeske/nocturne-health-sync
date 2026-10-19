@@ -11,7 +11,8 @@ picked silently.
 ## Scope
 
 In scope:
-- Read `HKQuantityType(.heartRate)`, `HKQuantityType(.stepCount)` and `HKCategoryType(.sleepAnalysis)`.
+- Read `HKQuantityType(.heartRate)`, `HKQuantityType(.stepCount)` and `HKCategoryType(.sleepAnalysis)`,
+  plus `heartRateVariabilitySDNN`, `respiratoryRate` and `oxygenSaturation` for sleep summaries only.
 - Upload to Nocturne V4 endpoints `POST /api/v4/HeartRate`, `POST /api/v4/StepCount` and
   `POST /api/v4/sleep/sessions/bulk`.
 - Background sync via HealthKit background delivery, with `BGAppRefreshTask` as fallback.
@@ -20,8 +21,10 @@ In scope:
 
 Out of scope (do not add without asking):
 - Writing anything to HealthKit.
-- Glucose, insulin, carbs, workouts, HRV, SpO2, respiratory rate (also not as sleep biometrics). The
-  architecture should make adding a type cheap, but do not implement extra types speculatively.
+- Glucose, insulin, carbs, workouts. HRV, SpO2 and respiratory rate as series of their own, and the
+  per-sample `biometricSamples` of a sleep session: they are sent only as sleep session averages
+  (decision 14). The architecture should make adding a type cheap, but do not implement extra types
+  speculatively.
 - Propagating HealthKit deletions to Nocturne (V4 deletes by Nocturne id, not by sync identifier;
   would need a local id map). Known gap, document it, don't half-solve it.
 - Honouring deletions made in Nocturne. The HeartRate/StepCount upsert path ignores soft-deleted
@@ -205,7 +208,19 @@ before any engine runs). Anchors and sync state live in a directory per instance
 - `sourceDevice` is `"Apple Health"` (`NocturneConstants.mergedDevice`, decision 8 applies: a session
   merges iPhone and Watch samples). `source` is `"Apple"` (the server's `SleepSource` member) and,
   with `originalId`, the dedup key: fixed forever.
-- Biometric samples (`biometricSamples`), latency, efficiency and scores are not sent.
+- Biometrics (decision 14): each session carries `avgHeartRate`, `minHeartRate`, `avgHrv`,
+  `avgBreathRate` and `avgSpo2`, from heart rate, `heartRateVariabilitySDNN` (ms), `respiratoryRate`
+  and `oxygenSaturation` readings of every source. Health's SpO2 fraction is converted to percent.
+  Only readings whose start falls in an asleep stage interval (`Light`, `Deep`, `Rem`, `Asleep`)
+  count; in-bed and awake time are excluded. Values are rounded to 0.1. A field is omitted when no
+  reading of its kind was taken while asleep; an in-bed-only session has none and costs no query.
+  Readings are queried per session over the session's span, never over a window, so daytime workout
+  heart rate is never read. The summary is part of the content digest: a late reading re-sends the
+  session while it is in the lookback. These types have no observer; the next run that includes
+  sleep picks them up. Impossible readings (not finite, negative, SpO2 above 100 %) are skipped and
+  logged.
+- Per-sample `biometricSamples`, latency, efficiency and scores are not sent. Nothing in Nocturne's
+  web app displays per-sample biometrics, and heart rate is already uploaded as its own series.
 - A sleep day whose session count drops (a session deleted in Health, two merged by late data)
   leaves its last name orphaned on the server. Known gap, document it.
 
@@ -242,7 +257,8 @@ client, and record the Nocturne version tested against in `docs/compat.md`.
   `DateTime`, an offset form would be shifted to server-local time and rejected by UTC-only storage),
   `timezone` (IANA), `type` (`Overnight`/`Nap`), `detectionMethod` (`Auto`/`Manual`), `isMainSleep`,
   `durationMs`, `totalSleepMs`, `totalAwakeMs`, `deepSleepMs`, `lightSleepMs`, `remSleepMs`,
-  `source` (`Apple`), `sourceDevice`, `sourceApp` (same value as `app`), `originalId`, `stages`
+  `avgHeartRate`, `minHeartRate` (bpm), `avgHrv` (ms), `avgBreathRate` (breaths/min), `avgSpo2`
+  (percent, 0 to 100; floats on the server, shown on the single-night report), `source` (`Apple`), `sourceDevice`, `sourceApp` (same value as `app`), `originalId`, `stages`
   (`startTime`, `endTime`, `stage` of `InBed`/`Asleep`/`Awake`/`Light`/`Deep`/`Rem`/`Unknown`,
   `ordinal`). Enums are serialised by name (`JsonStringEnumConverter`).
 - Dedup: `(dataSource, syncIdentifier)` is unique per tenant; re-uploading updates in place.
@@ -312,7 +328,8 @@ client, and record the Nocturne version tested against in `docs/compat.md`.
 ## Testing
 
 - Unit-test mapping (units, rounding, offsets, DST edges, bucket alignment, syncIdentifier
-  stability), sleep day boundaries across DST, session grouping and naming, chunking,
+  stability), sleep day boundaries across DST, session grouping and naming, sleep biometric
+  averaging (asleep-only, units, skipped readings), chunking,
   anchor-commit-only-on-success, single-flight refresh, and retry policy against fakes.
 - Simulator has HealthKit but no realistic background delivery. Background behaviour is verified
   on device only; say so in PRs instead of claiming it was tested.
@@ -372,5 +389,12 @@ and are open to revision until the first release, after which 12 is permanent):
     count shrinks.
 13. The longest session of a sleep day is the overnight (main) sleep; sleep lookback is the current
     day plus 2; sleep background delivery is `.hourly` like the rest.
+
+Decided 2026-10-19 (sleep biometrics, requested by the user):
+
+14. Sleep sessions carry the five summary fields (average and minimum heart rate, average HRV,
+    breathing rate and SpO2). Averages cover asleep stage intervals only, chosen because in-bed and
+    awake time raise them. Per-sample `biometricSamples` are not sent. No new OAuth scope; three new
+    Health read types.
 
 No decisions are currently open.

@@ -94,6 +94,11 @@ struct StoredSleepSession: Decodable {
   let startMills: Int
   let endMills: Int
   let totalSleepMs: Int
+  let avgHeartRate: Double?
+  let minHeartRate: Double?
+  let avgHrv: Double?
+  let avgBreathRate: Double?
+  let avgSpo2: Double?
   let sourceApp: String?
   let sourceDevice: String?
 }

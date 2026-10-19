@@ -74,3 +74,30 @@ public enum SleepStage: Sendable, Hashable, CaseIterable {
   /// session has no hole; uploaded as Nocturne's `Unknown` stage.
   case unknown
 }
+
+/// One vital-sign reading that a sleep session summarises, as read from Health in Health's own units.
+/// Produced by `HealthSource`; `SleepBiometrics` turns the readings of a session into its averages.
+public struct BiometricSample: Sendable, Hashable {
+  public enum Kind: Sendable, Hashable, CaseIterable {
+    /// count/min.
+    case heartRate
+    /// SDNN in milliseconds (`heartRateVariabilitySDNN`).
+    case heartRateVariability
+    /// breaths/min.
+    case respiratoryRate
+    /// A fraction in 0...1, as `HKUnit.percent()` reports it. Nocturne wants percent; the mapping
+    /// converts.
+    case oxygenSaturation
+  }
+
+  public var kind: Kind
+  /// `HKSample.startDate`. Decides which sleep interval the reading falls in.
+  public var date: Date
+  public var value: Double
+
+  public init(kind: Kind, date: Date, value: Double) {
+    self.kind = kind
+    self.date = date
+    self.value = value
+  }
+}

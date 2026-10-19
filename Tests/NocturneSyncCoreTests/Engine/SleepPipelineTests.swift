@@ -18,10 +18,12 @@ import Testing
   var initialWatermark: Date { SleepDays.dayStart(containing: now.addingTimeInterval(-90 * day), in: utc) }
 
   func harness(
-    sleep: [SleepSample] = [], client: FakeNocturneClient = FakeNocturneClient(),
+    sleep: [SleepSample] = [], biometrics: [BiometricSample] = [], client: FakeNocturneClient = FakeNocturneClient(),
     states: InMemorySyncStateStore = InMemorySyncStateStore()
   ) -> EngineHarness {
-    EngineHarness(health: FakeHealthSource(sleep: sleep), client: client, states: states, pipelines: [pipeline])
+    EngineHarness(
+      health: FakeHealthSource(sleep: sleep, biometrics: biometrics), client: client, states: states,
+      pipelines: [pipeline])
   }
 
   /// A night per sleep day from `from` (a day start) up to the day containing `to`, bedtime at 22:00.
@@ -199,6 +201,67 @@ import Testing
     #expect(harness.states.current.sleepBackfillCompletedThrough == initialWatermark.addingTimeInterval(3 * day))
     #expect(harness.states.current.sleep.uploadedCount == 3)
     #expect(harness.states.current.sleep.lastSuccessfulSync == nil)
+  }
+
+  @Test func sessionsCarryTheirBiometricSummary() async throws {
+    let bedtime = today.addingTimeInterval(-14 * 3600)  // yesterday 22:00
+    let readings = [
+      BiometricSample(kind: .heartRate, date: bedtime.addingTimeInterval(600), value: 54),
+      BiometricSample(kind: .heartRate, date: bedtime.addingTimeInterval(7800), value: 80),  // awake interval
+      BiometricSample(kind: .heartRateVariability, date: bedtime.addingTimeInterval(900), value: 47),
+      BiometricSample(kind: .respiratoryRate, date: bedtime.addingTimeInterval(1200), value: 13.5),
+      BiometricSample(kind: .oxygenSaturation, date: bedtime.addingTimeInterval(1500), value: 0.96),
+    ]
+    let harness = harness(sleep: EngineFixtures.night(from: bedtime), biometrics: readings)
+    _ = await harness.engine.sync(reason: .healthChange(.sleep))
+
+    let record = try #require(await harness.client.sleepBatches.first?.first)
+    #expect(
+      record.biometrics
+        == SleepBiometrics(
+          averageHeartRate: 54, minimumHeartRate: 54, averageHRV: 47, averageRespiratoryRate: 13.5,
+          averageOxygenSaturation: 96))
+    #expect(await harness.health.biometricQueries == [DateInterval(start: record.start, end: record.end)])
+  }
+
+  @Test func aLateReadingResendsTheSession() async throws {
+    let bedtime = today.addingTimeInterval(-14 * 3600)
+    let harness = harness(
+      sleep: EngineFixtures.night(from: bedtime),
+      biometrics: [BiometricSample(kind: .heartRate, date: bedtime.addingTimeInterval(600), value: 54)])
+    _ = await harness.engine.sync(reason: .healthChange(.sleep))
+    harness.clock.advance(by: 60)
+    _ = await harness.engine.sync(reason: .healthChange(.sleep))
+    #expect(await harness.client.calls.count == 1)
+
+    await harness.health.appendBiometrics([
+      BiometricSample(kind: .heartRateVariability, date: bedtime.addingTimeInterval(900), value: 52)
+    ])
+    harness.clock.advance(by: 60)
+    _ = await harness.engine.sync(reason: .healthChange(.sleep))
+    let resent = try #require(await harness.client.sleepBatches.last?.first)
+    #expect(await harness.client.calls.count == 2)
+    #expect(resent.biometrics.averageHRV == 52)
+    #expect(resent.biometrics.averageHeartRate == 54)
+  }
+
+  @Test func inBedOnlySessionsCostNoBiometricQuery() async throws {
+    let bedtime = today.addingTimeInterval(-14 * 3600)
+    let inBed = EngineFixtures.night(from: bedtime).filter { $0.stage == .inBed }
+    let harness = harness(sleep: inBed)
+    _ = await harness.engine.sync(reason: .healthChange(.sleep))
+    #expect(await harness.client.sleepBatches.first?.first?.biometrics.isEmpty == true)
+    #expect(await harness.health.biometricQueries.isEmpty)
+  }
+
+  @Test func lockedBiometricsDeferTheRun() async throws {
+    let harness = harness(sleep: EngineFixtures.night(from: today.addingTimeInterval(-14 * 3600)))
+    await harness.health.failNextBiometricQueries(.databaseInaccessible)
+    let report = await harness.engine.sync(reason: .launch)
+    #expect(report.results[.sleep]?.isDeferred == true)
+    #expect(await harness.client.calls.isEmpty)
+    #expect(harness.states.current.sleepLookbackSent.isEmpty)
+    #expect(harness.states.current.sleep.lastError == nil)
   }
 
   @Test func invalidSamplesAreSkipped() async throws {

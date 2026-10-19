@@ -60,8 +60,9 @@ targets:
           - UIInterfaceOrientationPortrait
         # Read-only HealthKit access. Deliberately no NSHealthUpdateUsageDescription.
         NSHealthShareUsageDescription: >-
-          NocturneSync reads your heart rate, step count and sleep to upload them to your own
-          Nocturne instance. Nothing is written to Health.
+          NocturneSync reads your heart rate, step count and sleep, with heart rate variability,
+          respiratory rate and blood oxygen during sleep, to upload them to your own Nocturne
+          instance. Nothing is written to Health.
         # fetch: BGAppRefreshTask. HealthKit background delivery needs only its entitlement.
         UIBackgroundModes:
           - fetch

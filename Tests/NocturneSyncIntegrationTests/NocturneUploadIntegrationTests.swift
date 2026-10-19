@@ -111,7 +111,10 @@ struct NocturneUploadIntegrationTests {
           .init(start: start, end: end, stage: .inBed),
           .init(start: start, end: start.addingTimeInterval(3600), stage: .light),
           .init(start: start.addingTimeInterval(3600), end: end, stage: .deep),
-        ])
+        ],
+        biometrics: SleepBiometrics(
+          averageHeartRate: 54.5, minimumHeartRate: 47, averageHRV: hours * 6, averageRespiratoryRate: 13.5,
+          averageOxygenSaturation: 96.5))
     }
     try await client.uploadSleepSessions([session(hours: 6)])
     try await client.uploadSleepSessions([session(hours: 7)])
@@ -125,6 +128,9 @@ struct NocturneUploadIntegrationTests {
     #expect(stored.first?.startMills == Int(start.timeIntervalSince1970 * 1000))
     #expect(stored.first?.endMills == Int(start.addingTimeInterval(7 * 3600).timeIntervalSince1970 * 1000))
     #expect(stored.first?.totalSleepMs == 7 * 3600 * 1000)
+    #expect(stored.first?.avgHrv == 42, "the re-upload replaced the summary")
+    #expect(stored.first?.avgHeartRate == 54.5 && stored.first?.minHeartRate == 47)
+    #expect(stored.first?.avgBreathRate == 13.5 && stored.first?.avgSpo2 == 96.5)
     #expect(stored.first?.sourceApp == app && stored.first?.sourceDevice == "integration-test")
   }
 

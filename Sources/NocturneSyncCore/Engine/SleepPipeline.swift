@@ -17,6 +17,10 @@ import Foundation
 /// together, because their names are positions within the day. Samples are read `margin` beyond a
 /// window on both sides, so a session that straddles a boundary is grouped whole and attributed to
 /// the day its start falls in; only sessions starting inside the window are uploaded by it.
+///
+/// Each session then gets its vital-sign summary (`SleepBiometrics`) from the readings Health has over
+/// the session's own span. The summary is part of the content digest, so an HRV or SpO2 reading that
+/// arrives after the night was first sent re-sends the session while it is in the lookback.
 public struct SleepPipeline: SyncPipeline {
   public static let lookbackDays = 2
   public static let backfillDays = 90
@@ -130,8 +134,32 @@ public struct SleepPipeline: SyncPipeline {
       }
       return true
     }
-    return SleepSessionBuilder.sessions(from: valid, timeZone: context.timeZone, device: device, app: context.app)
-      .filter { $0.start >= window.start && $0.start < window.end }
+    var sessions = SleepSessionBuilder.sessions(
+      from: valid, timeZone: context.timeZone, device: device, app: context.app
+    )
+    .filter { $0.start >= window.start && $0.start < window.end }
+    for index in sessions.indices {
+      sessions[index].biometrics = try await biometrics(for: sessions[index], context)
+    }
+    return sessions
+  }
+
+  /// Reads the session's span and summarises the readings taken while asleep. A session with no
+  /// asleep interval has nothing to summarise and costs no query.
+  private func biometrics(for session: SleepSessionRecord, _ context: SyncContext) async throws(PipelineStop)
+    -> SleepBiometrics
+  {
+    guard session.stages.contains(where: \.stage.isAsleep) else { return SleepBiometrics() }
+    guard !Task.isCancelled else { throw .cancelled }
+    let samples: [BiometricSample]
+    do {
+      samples = try await context.health.biometricSamples(in: DateInterval(start: session.start, end: session.end))
+    } catch .databaseInaccessible {
+      throw .deferred
+    } catch {
+      throw .failed(.health(error))
+    }
+    return SleepBiometrics.summarize(samples, stages: session.stages)
   }
 
   /// Uploads in batches; an empty array sends nothing.

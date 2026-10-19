@@ -40,6 +40,25 @@ import Testing
     #expect(String(decoding: data, as: UTF8.self) == expected)
   }
 
+  @Test func sleepBiometricsAreSentWhenPresent() throws {
+    var record = Fixtures.sleepSession()
+    record.biometrics = SleepBiometrics(
+      averageHeartRate: 54.3, minimumHeartRate: 48, averageHRV: 41.5, averageRespiratoryRate: 13.2,
+      averageOxygenSaturation: 96.4)
+    let json = String(decoding: try RequestEncoder.encode([SleepSessionRequestBody(record)]), as: UTF8.self)
+    for field in [
+      "\"avgHeartRate\":54.3", "\"minHeartRate\":48", "\"avgHrv\":41.5", "\"avgBreathRate\":13.2", "\"avgSpo2\":96.4",
+    ] {
+      #expect(json.contains(field), "missing \(field)")
+    }
+  }
+
+  @Test func absentBiometricsAreOmitted() throws {
+    let json = String(
+      decoding: try RequestEncoder.encode([SleepSessionRequestBody(Fixtures.sleepSession())]), as: UTF8.self)
+    #expect(!json.contains("avg") && !json.contains("minHeartRate"))
+  }
+
   @Test func undifferentiatedSleepOmitsStageTotals() throws {
     var record = Fixtures.sleepSession()
     record.stages = [.init(start: record.start, end: record.end, stage: .asleep)]

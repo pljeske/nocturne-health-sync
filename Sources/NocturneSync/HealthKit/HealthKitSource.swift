@@ -22,6 +22,12 @@ import os
 ///   sample's `value` is an `HKCategoryValueSleepAnalysis` raw value, and `HKMetadataKeyWasUserEntered`
 ///   marks samples typed into Health. Sleep stages are written by watchOS after the night ends, so a
 ///   window re-read (not an anchor) is what sees a complete night.
+/// - One `HKSampleQueryDescriptor` with several `.quantitySample` predicates returns the samples of
+///   every listed type; each sample's `quantityType` says which. `.strictStartDate` keeps samples
+///   whose start lies in the interval. HRV is `heartRateVariabilitySDNN` in ms; `HKUnit.percent()`
+///   reports SpO2 as a fraction 0...1. HRV, respiratory rate and SpO2 have no observer of their own:
+///   a late reading is picked up by the next run that includes sleep (launch, Sync now, background
+///   refresh, or new sleep samples) while the night is in the lookback.
 /// - A locked device fails queries with `HKError.Code.errorDatabaseInaccessible`.
 /// - Unanswered `HKObserverQuery` deliveries make iOS throttle background delivery, so the completion
 ///   handler is called on every path.
@@ -42,6 +48,7 @@ final class HealthKitSource: HealthSource {
   func requestReadAuthorization() async throws(HealthSourceError) {
     guard HKHealthStore.isHealthDataAvailable() else { throw .healthDataUnavailable }
     let read = Set(HealthDataType.allCases.map { Self.sampleType($0) as HKObjectType })
+      .union(Self.biometricTypes.map(\.type))
     do {
       try await store.requestAuthorization(toShare: [], read: read)
     } catch {
@@ -143,6 +150,26 @@ final class HealthKitSource: HealthSource {
     }
   }
 
+  func biometricSamples(in interval: DateInterval) async throws(HealthSourceError) -> [BiometricSample] {
+    let predicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end, options: .strictStartDate)
+    let descriptor = HKSampleQueryDescriptor(
+      predicates: Self.biometricTypes.map { .quantitySample(type: $0.type, predicate: predicate) },
+      sortDescriptors: [SortDescriptor(\.startDate)])
+
+    let samples: [HKQuantitySample]
+    do {
+      samples = try await descriptor.result(for: store)
+    } catch {
+      throw Self.mapError(error)
+    }
+
+    return samples.compactMap { sample in
+      guard let entry = Self.biometricTypes.first(where: { $0.type == sample.quantityType }) else { return nil }
+      return BiometricSample(
+        kind: entry.kind, date: sample.startDate, value: sample.quantity.doubleValue(for: entry.unit))
+    }
+  }
+
   func enableBackgroundDelivery(for type: HealthDataType) async throws(HealthSourceError) {
     do {
       try await store.enableBackgroundDelivery(for: Self.sampleType(type), frequency: Self.deliveryFrequency(type))
@@ -190,6 +217,14 @@ final class HealthKitSource: HealthSource {
     case .heartRate, .stepCount, .sleep: .hourly
     }
   }
+
+  /// The readings a sleep session's summary is built from, with the unit `BiometricSample.Kind` expects.
+  private static let biometricTypes: [(kind: BiometricSample.Kind, type: HKQuantityType, unit: HKUnit)] = [
+    (.heartRate, HKQuantityType(.heartRate), .count().unitDivided(by: .minute())),
+    (.heartRateVariability, HKQuantityType(.heartRateVariabilitySDNN), .secondUnit(with: .milli)),
+    (.respiratoryRate, HKQuantityType(.respiratoryRate), .count().unitDivided(by: .minute())),
+    (.oxygenSaturation, HKQuantityType(.oxygenSaturation), .percent()),
+  ]
 
   private static func sleepStage(_ value: Int) -> SleepStage {
     switch HKCategoryValueSleepAnalysis(rawValue: value) {

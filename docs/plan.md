@@ -224,6 +224,22 @@ Added 2026-10-19 on request (decisions 10 to 13 in `CLAUDE.md`).
   stability, lookback change detection, renumbering when a nap appears late, watermark commit only
   on success, cancellation, deferral while locked, and the request JSON golden.
 
+### 12. Sleep biometrics (`Domain/SleepBiometrics.swift`)
+
+Added 2026-10-19 on request (decision 14 in `CLAUDE.md`).
+
+- `BiometricSample` carries heart rate, HRV (SDNN, ms), respiratory rate and SpO2 (fraction) readings
+  in Health's units. `SleepBiometrics.summarize` keeps readings that start in an asleep stage
+  interval, converts SpO2 to percent, skips impossible values, and rounds to 0.1.
+- `HealthSource.biometricSamples(in:)` is queried once per session with an asleep interval, over the
+  session's span; `HealthKitSource` uses one `HKSampleQueryDescriptor` over the four quantity types.
+- The summary is part of `SleepSessionRecord.contentDigest`, so late readings re-send the session in
+  the lookback. The request body adds `avgHeartRate`, `minHeartRate`, `avgHrv`, `avgBreathRate`,
+  `avgSpo2`, omitted when nil.
+- Tests: averaging and minimum, asleep-only filtering, overlap counted once, unit conversion, skipped
+  readings, digest change, late reading re-send, no query for in-bed-only sessions, deferral while
+  locked, wire fields.
+
 ## Cross-cutting rules applied in every step
 
 - `swift format` before commit. Swift Testing only. `os.Logger` with subsystem per module,

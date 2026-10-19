@@ -143,12 +143,15 @@ public struct SleepSessionRecord: Sendable, Hashable {
   /// Ordered by start. Intervals from different sources may overlap (iPhone "in bed" under Watch
   /// stages); the server counts sleep per stage, and `inBed` is neither sleep nor awake.
   public var stages: [StageInterval]
+  /// Vital-sign averages while asleep. Empty until the pipeline fills it from Health.
+  public var biometrics: SleepBiometrics
 
   public var source: String { NocturneConstants.sleepSource }
 
   public init(
     originalID: String, start: Date, end: Date, timeZoneIdentifier: String, kind: Kind, isMainSleep: Bool,
-    detection: Detection, device: String, app: String, stages: [StageInterval]
+    detection: Detection, device: String, app: String, stages: [StageInterval],
+    biometrics: SleepBiometrics = SleepBiometrics()
   ) {
     self.originalID = originalID
     self.start = start
@@ -160,6 +163,7 @@ public struct SleepSessionRecord: Sendable, Hashable {
     self.device = device
     self.app = app
     self.stages = stages
+    self.biometrics = biometrics
   }
 
   public var durationMs: Int { Int((end.timeIntervalSince(start) * 1000).rounded()) }
@@ -187,6 +191,11 @@ public struct SleepSessionRecord: Sendable, Hashable {
       text +=
         "|\(interval.start.timeIntervalSince1970),\(interval.end.timeIntervalSince1970),\(interval.stage.rawValue)"
     }
+    let summary = [
+      biometrics.averageHeartRate, biometrics.minimumHeartRate, biometrics.averageHRV,
+      biometrics.averageRespiratoryRate, biometrics.averageOxygenSaturation,
+    ]
+    text += "|biometrics:" + summary.map { $0.map { "\($0)" } ?? "-" }.joined(separator: ",")
     return FNV1a.hexDigest(of: text)
   }
 }

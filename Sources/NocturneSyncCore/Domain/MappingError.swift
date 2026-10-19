@@ -9,4 +9,6 @@ public enum MappingError: Error, Equatable, Sendable {
   case invalidStepCount(Double)
   /// A sleep sample that does not end after it starts.
   case invalidSleepInterval(start: Date, end: Date)
+  /// A vital-sign reading that is not finite, negative, or (SpO2) above 100 %.
+  case invalidBiometric(Double)
 }

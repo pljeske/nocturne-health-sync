@@ -25,14 +25,21 @@ actor FakeHealthSource: HealthSource {
   private(set) var heartRateQueries: [HeartRateQuery] = []
   private(set) var stepQueries: [StepQuery] = []
   private(set) var sleepQueries: [DateInterval] = []
+  private(set) var biometrics: [BiometricSample]
+  private(set) var biometricQueries: [DateInterval] = []
   private(set) var authorizationRequests = 0
   private(set) var backgroundDeliveryRequests: [HealthDataType] = []
   private var observers: [HealthDataType: @Sendable () async -> Void] = [:]
   private var heartRateErrors: [HealthSourceError] = []
   private var stepErrors: [HealthSourceError] = []
   private var sleepErrors: [HealthSourceError] = []
+  private var biometricErrors: [HealthSourceError] = []
 
-  init(heartRates: [HeartRateSample] = [], stepTotals: [StepBucketTotal] = [], sleep: [SleepSample] = []) {
+  init(
+    heartRates: [HeartRateSample] = [], stepTotals: [StepBucketTotal] = [], sleep: [SleepSample] = [],
+    biometrics: [BiometricSample] = []
+  ) {
+    self.biometrics = biometrics
     heartRateLog = heartRates
     stepTotalsByStart = Dictionary(uniqueKeysWithValues: stepTotals.map { ($0.bucket.startUnixSeconds, $0) })
     sleepSamplesByID = Dictionary(uniqueKeysWithValues: sleep.map { ($0.id, $0) })
@@ -68,6 +75,15 @@ actor FakeHealthSource: HealthSource {
 
   func failNextSleepQueries(_ errors: HealthSourceError...) {
     sleepErrors.append(contentsOf: errors)
+  }
+
+  /// Adds readings, as a late Watch sync would.
+  func appendBiometrics(_ samples: [BiometricSample]) {
+    biometrics.append(contentsOf: samples)
+  }
+
+  func failNextBiometricQueries(_ errors: HealthSourceError...) {
+    biometricErrors.append(contentsOf: errors)
   }
 
   var observedTypes: Set<HealthDataType> { Set(observers.keys) }
@@ -125,6 +141,12 @@ actor FakeHealthSource: HealthSource {
     return sleepSamplesByID.values
       .filter { $0.start < interval.end && $0.end > interval.start }
       .sorted { ($0.start, $0.end, $0.id.uuidString) < ($1.start, $1.end, $1.id.uuidString) }
+  }
+
+  func biometricSamples(in interval: DateInterval) async throws(HealthSourceError) -> [BiometricSample] {
+    biometricQueries.append(interval)
+    if !biometricErrors.isEmpty { throw biometricErrors.removeFirst() }
+    return biometrics.filter { interval.start <= $0.date && $0.date < interval.end }.sorted { $0.date < $1.date }
   }
 
   func enableBackgroundDelivery(for type: HealthDataType) async throws(HealthSourceError) {
