@@ -49,6 +49,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     info:
       path: Sources/NocturneSync/Info.plist
       properties:
@@ -58,11 +59,16 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
-        # Read-only HealthKit access. Deliberately no NSHealthUpdateUsageDescription.
+        # Read-only HealthKit access. App Store Connect validation requires the update string too
+        # because the binary references requestAuthorization(toShare:read:), even with an empty
+        # share set; the text says nothing is written. Nothing is ever requested for sharing.
         NSHealthShareUsageDescription: >-
           NocturneSync reads your heart rate, step count and sleep, with heart rate variability,
           respiratory rate and blood oxygen during sleep, to upload them to your own Nocturne
           instance. Nothing is written to Health.
+        NSHealthUpdateUsageDescription: >-
+          NocturneSync never writes to Health. This text is required by the App Store because the
+          app uses the HealthKit authorization API; no write access is requested.
         # fetch: BGAppRefreshTask. HealthKit background delivery needs only its entitlement.
         UIBackgroundModes:
           - fetch
