@@ -34,6 +34,32 @@ enum Fixtures {
   static func stepCounts(_ count: Int) -> [StepCountRecord] {
     (0..<count).map { stepCount(index: $0) }
   }
+
+  /// A 90-minute session starting at `instant`, with one in-bed interval and three stages.
+  static func sleepSession(index: Int = 0) -> SleepSessionRecord {
+    let start = instant.addingTimeInterval(TimeInterval(index) * 86_400)
+    let end = start.addingTimeInterval(5400)
+    return SleepSessionRecord(
+      originalID: "sleep-2024-07-0\(index + 1)-0",
+      start: start,
+      end: end,
+      timeZoneIdentifier: "Europe/Berlin",
+      kind: .overnight,
+      isMainSleep: true,
+      detection: .auto,
+      device: "Apple Health",
+      app: "NocturneSync",
+      stages: [
+        .init(start: start, end: end, stage: .inBed),
+        .init(start: start, end: start.addingTimeInterval(1800), stage: .light),
+        .init(start: start.addingTimeInterval(1800), end: start.addingTimeInterval(3600), stage: .deep),
+        .init(start: start.addingTimeInterval(3600), end: end, stage: .awake),
+      ])
+  }
+
+  static func sleepSessions(_ count: Int) -> [SleepSessionRecord] {
+    (0..<count).map { sleepSession(index: $0) }
+  }
 }
 
 /// Runs `body` and returns the typed error it threw, or nil if it succeeded.

@@ -11,6 +11,7 @@ import Foundation
 public protocol NocturneClient: Sendable {
   func uploadHeartRates(_ records: [HeartRateRecord]) async throws(NocturneClientError)
   func uploadStepCounts(_ records: [StepCountRecord]) async throws(NocturneClientError)
+  func uploadSleepSessions(_ records: [SleepSessionRecord]) async throws(NocturneClientError)
 }
 
 /// Live client over an `HTTPTransport`. Knows nothing about authentication: the bearer header and the
@@ -20,37 +21,49 @@ public struct HTTPNocturneClient: NocturneClient {
   public let baseURL: URL
   private let transport: any HTTPTransport
   private let chunkSize: Int
+  private let sleepChunkSize: Int
   private let now: @Sendable () -> Date
 
   /// - Parameters:
-  ///   - chunkSize: records per request; must not exceed `NocturneAPI.maxRecordsPerRequest`.
+  ///   - chunkSize: heart rate or step records per request; at most `NocturneAPI.maxRecordsPerRequest`.
+  ///   - sleepChunkSize: sleep sessions per request; at most `NocturneAPI.maxSleepSessionsPerRequest`.
   ///   - now: clock used to turn an HTTP-date `Retry-After` into a delay. Injectable for tests.
   public init(
     baseURL: URL,
     transport: any HTTPTransport,
     chunkSize: Int = NocturneAPI.uploadChunkSize,
+    sleepChunkSize: Int = NocturneAPI.sleepUploadChunkSize,
     now: @escaping @Sendable () -> Date = Date.init
   ) {
     precondition(
       (1...NocturneAPI.maxRecordsPerRequest).contains(chunkSize),
       "chunkSize must be in 1...\(NocturneAPI.maxRecordsPerRequest)")
+    precondition(
+      (1...NocturneAPI.maxSleepSessionsPerRequest).contains(sleepChunkSize),
+      "sleepChunkSize must be in 1...\(NocturneAPI.maxSleepSessionsPerRequest)")
     self.baseURL = baseURL
     self.transport = transport
     self.chunkSize = chunkSize
+    self.sleepChunkSize = sleepChunkSize
     self.now = now
   }
 
   public func uploadHeartRates(_ records: [HeartRateRecord]) async throws(NocturneClientError) {
-    try await upload(records.map(HeartRateRequestBody.init), to: NocturneAPI.heartRatePath)
+    try await upload(records.map(HeartRateRequestBody.init), to: NocturneAPI.heartRatePath, chunkSize: chunkSize)
   }
 
   public func uploadStepCounts(_ records: [StepCountRecord]) async throws(NocturneClientError) {
-    try await upload(records.map(StepCountRequestBody.init), to: NocturneAPI.stepCountPath)
+    try await upload(records.map(StepCountRequestBody.init), to: NocturneAPI.stepCountPath, chunkSize: chunkSize)
+  }
+
+  public func uploadSleepSessions(_ records: [SleepSessionRecord]) async throws(NocturneClientError) {
+    try await upload(
+      records.map(SleepSessionRequestBody.init), to: NocturneAPI.sleepSessionsPath, chunkSize: sleepChunkSize)
   }
 
   /// Sends `bodies` in order, `chunkSize` per request, and stops at the first failure. Checks for
   /// cancellation before each request so a cancelled run does not start a doomed upload.
-  private func upload(_ bodies: [some Encodable], to path: String) async throws(NocturneClientError) {
+  private func upload(_ bodies: [some Encodable], to path: String, chunkSize: Int) async throws(NocturneClientError) {
     precondition(!bodies.isEmpty, "upload called with no records; the server rejects an empty array")
     for chunk in bodies.chunks(ofCount: chunkSize) {
       guard !Task.isCancelled else { throw .cancelled }

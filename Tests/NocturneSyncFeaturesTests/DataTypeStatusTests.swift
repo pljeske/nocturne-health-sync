@@ -13,8 +13,8 @@ import Testing
 
   @Test func freshInstallHasNothingStarted() {
     let rows = DataTypeStatus.make(from: SyncState())
-    #expect(rows.map(\.type) == [.heartRate, .stepCount])
-    #expect(rows.map(\.title) == ["Heart rate", "Steps"])
+    #expect(rows.map(\.type) == [.heartRate, .stepCount, .sleep])
+    #expect(rows.map(\.title) == ["Heart rate", "Steps", "Sleep"])
     #expect(rows.allSatisfy { $0.backfill == .notStarted && !$0.noDataSeen && $0.lastSuccessfulSync == nil })
   }
 
@@ -42,6 +42,16 @@ import Testing
     #expect(status(.stepCount, behind).backfill == .inProgress(through: watermark))
     let neverCompleted = SyncState(stepBackfillCompletedThrough: watermark)
     #expect(status(.stepCount, neverCompleted).backfill == .inProgress(through: watermark))
+  }
+
+  @Test func sleepBackfillIsCompleteWhenTheWatermarkIsWithinTheLookback() {
+    let caughtUp = SyncState(
+      sleep: .init(lastSuccessfulSync: now), sleepBackfillCompletedThrough: now.addingTimeInterval(-3 * 86_400 + 60))
+    #expect(status(.sleep, caughtUp).backfill == .complete)
+    let watermark = now.addingTimeInterval(-40 * 86_400)
+    let behind = SyncState(sleep: .init(lastSuccessfulSync: now), sleepBackfillCompletedThrough: watermark)
+    #expect(status(.sleep, behind).backfill == .inProgress(through: watermark))
+    #expect(status(.sleep, SyncState()).backfill == .notStarted)
   }
 
   @Test func errorIsCarriedThrough() {

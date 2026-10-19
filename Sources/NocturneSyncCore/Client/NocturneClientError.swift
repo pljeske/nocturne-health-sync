@@ -12,8 +12,8 @@ public enum NocturneClientError: Error, Sendable {
   case badRequest(ProblemDetails?)
   /// 401 that survived the auth layer's single refresh-and-retry. The grant is unusable.
   case unauthorized
-  /// 403. The token lacks the `heartrate.readwrite` / `stepcount.readwrite` scope. Stop syncing and
-  /// surface to the user.
+  /// 403. The token lacks the endpoint's `*.readwrite` scope (e.g. a sign-in from before sleep was
+  /// added). Stop syncing that type and surface to the user.
   case forbidden(ProblemDetails?)
   /// 503 with `error: setup_required`. The instance has no configured account yet.
   case setupRequired(message: String?)

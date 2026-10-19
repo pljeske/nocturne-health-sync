@@ -76,7 +76,7 @@ struct NocturneUploadIntegrationTests {
     let metric = Int.random(in: 100...900)
     let first = buckets.map { bucket in
       StepCountRecord(
-        timestamp: bucket.start, utcOffsetMinutes: -300, metric: metric, device: NocturneConstants.stepDevice,
+        timestamp: bucket.start, utcOffsetMinutes: -300, metric: metric, device: NocturneConstants.mergedDevice,
         app: app, syncIdentifier: bucket.syncIdentifier)
     }
     try await client.uploadStepCounts(first)
@@ -95,6 +95,43 @@ struct NocturneUploadIntegrationTests {
     #expect(stored.count == buckets.count, "one row per bucket identifier")
     #expect(stored.allSatisfy { $0.metric == metric + 1 && $0.source == 0 && $0.utcOffset == -300 })
     #expect(stored.allSatisfy { $0.dataSource == NocturneConstants.dataSource && $0.enteredBy == app })
+  }
+
+  @Test func sleepSessionReuploadUpdatesInPlace() async throws {
+    let (client, token) = try await client()
+    let start = recentInstant().addingTimeInterval(-8 * 3600)
+    // A random day label keeps repeated runs from colliding with each other's sessions.
+    let day = String(format: "2000-%02d-%02d", Int.random(in: 1...12), Int.random(in: 1...28))
+    func session(hours: Double) -> SleepSessionRecord {
+      let end = start.addingTimeInterval(hours * 3600)
+      return SleepSessionRecord(
+        originalID: "sleep-\(day)-0", start: start, end: end, timeZoneIdentifier: "Europe/Berlin", kind: .overnight,
+        isMainSleep: true, detection: .auto, device: "integration-test", app: app,
+        stages: [
+          .init(start: start, end: end, stage: .inBed),
+          .init(start: start, end: start.addingTimeInterval(3600), stage: .light),
+          .init(start: start.addingTimeInterval(3600), end: end, stage: .deep),
+        ],
+        biometrics: SleepBiometrics(
+          averageHeartRate: 54.5, minimumHeartRate: 47, averageHRV: hours * 6, averageRespiratoryRate: 13.5,
+          averageOxygenSaturation: 96.5))
+    }
+    try await client.uploadSleepSessions([session(hours: 6)])
+    try await client.uploadSleepSessions([session(hours: 7)])
+
+    let stored = try await IntegrationEnvironment.fetchSleepSessions(around: start, token: token)
+      .filter { $0.originalId == "sleep-\(day)-0" }
+
+    #expect(stored.count == 1, "one row per (source, originalId) after a re-upload")
+    #expect(stored.first?.source == NocturneConstants.sleepSource)
+    #expect(stored.first?.type == "Overnight")
+    #expect(stored.first?.startMills == Int(start.timeIntervalSince1970 * 1000))
+    #expect(stored.first?.endMills == Int(start.addingTimeInterval(7 * 3600).timeIntervalSince1970 * 1000))
+    #expect(stored.first?.totalSleepMs == 7 * 3600 * 1000)
+    #expect(stored.first?.avgHrv == 42, "the re-upload replaced the summary")
+    #expect(stored.first?.avgHeartRate == 54.5 && stored.first?.minHeartRate == 47)
+    #expect(stored.first?.avgBreathRate == 13.5 && stored.first?.avgSpo2 == 96.5)
+    #expect(stored.first?.sourceApp == app && stored.first?.sourceDevice == "integration-test")
   }
 
   @Test func invalidTokenIsUnauthorized() async throws {

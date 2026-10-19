@@ -1,16 +1,20 @@
 /// Values that are part of the server-side identity of uploaded records. Changing any of them after
 /// the first release duplicates history on the server.
 public enum NocturneConstants {
-  /// Half of Nocturne's dedup key `(dataSource, syncIdentifier)`. Fixed forever.
+  /// Half of Nocturne's dedup key `(dataSource, syncIdentifier)` for heart rate and steps. Fixed forever.
   public static let dataSource = "apple-health-ios"
+
+  /// Half of Nocturne's dedup key `(source, originalId)` for sleep sessions: the `SleepSource` enum
+  /// member for Apple Health. Fixed forever.
+  public static let sleepSource = "Apple"
 
   /// Step bucket length. Part of every step `syncIdentifier`, so it is as permanent as `dataSource`.
   public static let stepBucketSeconds = 300
 
-  /// `device` of every step record (decision 8). A step bucket is Health's source-prioritised total
-  /// of iPhone and Watch, so it names where the number comes from, not a recording device. Not part of
-  /// the dedup key.
-  public static let stepDevice = "Apple Health"
+  /// `device` of every step record and sleep session (decision 8). Both are Health's merged view of
+  /// iPhone and Watch, so the value names where the data comes from, not a recording device. Not part
+  /// of any dedup key.
+  public static let mergedDevice = "Apple Health"
 
   /// Display name; the `app` field of every record is `appIdentifier(version:)`.
   public static let appName = "NocturneSync"

@@ -131,3 +131,43 @@ func eventually(
   }
   Issue.record("condition never became true", sourceLocation: sourceLocation)
 }
+
+extension EngineFixtures {
+  static let watch = "Watch7,1"
+  static let phone = "iPhone16,2"
+
+  /// A night of `hours` hours from `bedtime`: one iPhone "in bed" sample over the whole span and Watch
+  /// stages in 30-minute intervals cycling core, deep, REM, core, awake. Sample ids derive from the
+  /// bedtime, so the same night is the same samples on every call.
+  static func night(from bedtime: Date, hours: Int = 8, userEntered: Bool = false) -> [SleepSample] {
+    let seed = UInt32(truncatingIfNeeded: Int(bedtime.timeIntervalSince1970))
+    func id(_ index: Int) -> UUID {
+      UUID(uuidString: String(format: "%08X-%04X-4000-8000-000000000000", seed, UInt32(index)))!
+    }
+    let end = bedtime.addingTimeInterval(TimeInterval(hours) * 3600)
+    var samples = [
+      SleepSample(id: id(0), start: bedtime, end: end, stage: .inBed, device: phone, wasUserEntered: userEntered)
+    ]
+    let cycle: [SleepStage] = [.asleepCore, .asleepDeep, .asleepREM, .asleepCore, .awake]
+    for index in 0..<(hours * 2) {
+      let start = bedtime.addingTimeInterval(TimeInterval(index) * 1800)
+      samples.append(
+        SleepSample(
+          id: id(index + 1), start: start, end: start.addingTimeInterval(1800), stage: cycle[index % cycle.count],
+          device: watch, wasUserEntered: userEntered))
+    }
+    return samples
+  }
+
+  /// A short, single-sample nap.
+  static func nap(at start: Date, minutes: Int = 40) -> [SleepSample] {
+    [
+      SleepSample(
+        id: UUID(
+          uuidString: String(
+            format: "%08X-0000-4000-8000-00000000000A", UInt32(truncatingIfNeeded: Int(start.timeIntervalSince1970))))!,
+        start: start, end: start.addingTimeInterval(TimeInterval(minutes) * 60), stage: .asleepUnspecified,
+        device: watch)
+    ]
+  }
+}

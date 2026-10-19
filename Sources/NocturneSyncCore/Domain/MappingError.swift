@@ -1,3 +1,5 @@
+import Foundation
+
 /// A Health value that cannot be represented as a Nocturne record. Such a sample is a bug in the
 /// producer, not a transient condition, so it is never retried.
 public enum MappingError: Error, Equatable, Sendable {
@@ -5,4 +7,8 @@ public enum MappingError: Error, Equatable, Sendable {
   case invalidHeartRate(Double)
   /// NaN, infinite, negative, or beyond `Int`.
   case invalidStepCount(Double)
+  /// A sleep sample that does not end after it starts.
+  case invalidSleepInterval(start: Date, end: Date)
+  /// A vital-sign reading that is not finite, negative, or (SpO2) above 100 %.
+  case invalidBiometric(Double)
 }

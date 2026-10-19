@@ -42,7 +42,7 @@ struct StatusView: View {
         }
       } footer: {
         Text(
-          "iOS decides when background syncs run, about hourly when there is new data. Sync now also re-sends the last day of steps."
+          "iOS decides when background syncs run, about hourly when there is new data. Sync now also re-sends the last day of steps and the last three days of sleep."
         )
       }
     }
@@ -52,8 +52,8 @@ struct StatusView: View {
   }
 }
 
-/// One data type's live progress. Steps have a real fraction; heart rate shows a spinner, because
-/// HealthKit returns samples in insertion order and the amount left is unknown.
+/// One data type's live progress. Steps and sleep have a real fraction; heart rate shows a spinner,
+/// because HealthKit returns samples in insertion order and the amount left is unknown.
 private struct SyncActivityRow: View {
   let progress: SyncProgress
 

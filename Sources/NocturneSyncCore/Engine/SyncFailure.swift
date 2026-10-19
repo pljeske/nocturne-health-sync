@@ -38,7 +38,7 @@ public enum SyncFailure: Error, Sendable {
     case .unauthorized:
       "Nocturne did not accept the sign-in. Sign in again."
     case .forbidden(let problem):
-      "Nocturne denied access; the sign-in may lack the heart rate or step count scope."
+      "Nocturne denied access; the sign-in lacks a permission this data needs. Sign out and sign in again."
         + (problem?.message.map { " (\($0))" } ?? "")
     case .setupRequired(let message):
       message ?? "The Nocturne instance has not finished its initial setup."

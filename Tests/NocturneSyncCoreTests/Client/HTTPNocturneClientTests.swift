@@ -37,6 +37,16 @@ import Testing
     #expect(requests.map { $0.url?.absoluteString } == ["https://tenant.example.test/api/v4/StepCount"])
   }
 
+  @Test func postsSleepSessionsToTheBulkEndpointInSmallerChunks() async throws {
+    let transport = FakeHTTPTransport(fallback: .response(status: 201, body: Data("[]".utf8)))
+    try await makeClient(transport).uploadSleepSessions(Fixtures.sleepSessions(21))
+    let requests = await transport.requests
+    #expect(
+      requests.map { $0.url?.absoluteString }
+        == Array(repeating: "https://tenant.example.test/api/v4/sleep/sessions/bulk", count: 2))
+    #expect(try await transport.bodyCounts == [20, 1])
+  }
+
   @Test func baseURLWithTrailingSlashIsJoinedCleanly() async throws {
     let transport = FakeHTTPTransport()
     let client = HTTPNocturneClient(baseURL: URL(string: "https://tenant.example.test/")!, transport: transport)

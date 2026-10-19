@@ -18,6 +18,16 @@ import os
 ///   anchor and a fixed interval in whole minutes (the unit Apple's examples use) yields epoch-aligned
 ///   buckets. Every bucket start is checked,
 ///   and a misaligned one fails the query instead of producing wrong identifiers.
+/// - `HKSampleQueryDescriptor` without a limit returns every matching `HKCategorySample`; a sleep
+///   sample's `value` is an `HKCategoryValueSleepAnalysis` raw value, and `HKMetadataKeyWasUserEntered`
+///   marks samples typed into Health. Sleep stages are written by watchOS after the night ends, so a
+///   window re-read (not an anchor) is what sees a complete night.
+/// - One `HKSampleQueryDescriptor` with several `.quantitySample` predicates returns the samples of
+///   every listed type; each sample's `quantityType` says which. `.strictStartDate` keeps samples
+///   whose start lies in the interval. HRV is `heartRateVariabilitySDNN` in ms; `HKUnit.percent()`
+///   reports SpO2 as a fraction 0...1. HRV, respiratory rate and SpO2 have no observer of their own:
+///   a late reading is picked up by the next run that includes sleep (launch, Sync now, background
+///   refresh, or new sleep samples) while the night is in the lookback.
 /// - A locked device fails queries with `HKError.Code.errorDatabaseInaccessible`.
 /// - Unanswered `HKObserverQuery` deliveries make iOS throttle background delivery, so the completion
 ///   handler is called on every path.
@@ -37,7 +47,8 @@ final class HealthKitSource: HealthSource {
 
   func requestReadAuthorization() async throws(HealthSourceError) {
     guard HKHealthStore.isHealthDataAvailable() else { throw .healthDataUnavailable }
-    let read = Set(HealthDataType.allCases.map { Self.quantityType($0) as HKObjectType })
+    let read = Set(HealthDataType.allCases.map { Self.sampleType($0) as HKObjectType })
+      .union(Self.biometricTypes.map(\.type))
     do {
       try await store.requestAuthorization(toShare: [], read: read)
     } catch {
@@ -54,7 +65,7 @@ final class HealthKitSource: HealthSource {
 
     let predicate = HKQuery.predicateForSamples(withStart: start, end: nil, options: .strictStartDate)
     let descriptor = HKAnchoredObjectQueryDescriptor(
-      predicates: [.quantitySample(type: Self.quantityType(.heartRate), predicate: predicate)],
+      predicates: [.quantitySample(type: HKQuantityType(.heartRate), predicate: predicate)],
       anchor: anchor,
       limit: limit)
 
@@ -88,7 +99,7 @@ final class HealthKitSource: HealthSource {
     // Overlap, not strict start: a sample that began before the window still contributes its share.
     let predicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end, options: [])
     let descriptor = HKStatisticsCollectionQueryDescriptor(
-      predicate: .quantitySample(type: Self.quantityType(.stepCount), predicate: predicate),
+      predicate: .quantitySample(type: HKQuantityType(.stepCount), predicate: predicate),
       options: .cumulativeSum,
       anchorDate: interval.start,
       intervalComponents: DateComponents(minute: bucketSeconds / 60))
@@ -113,9 +124,55 @@ final class HealthKitSource: HealthSource {
     return totals.sorted { $0.bucket.startUnixSeconds < $1.bucket.startUnixSeconds }
   }
 
+  func sleepSamples(overlapping interval: DateInterval) async throws(HealthSourceError) -> [SleepSample] {
+    // Overlap, not strict start: a sample that began before the window still belongs to a session in it.
+    let predicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end, options: [])
+    let descriptor = HKSampleQueryDescriptor(
+      predicates: [.categorySample(type: HKCategoryType(.sleepAnalysis), predicate: predicate)],
+      sortDescriptors: [SortDescriptor(\.startDate)])
+
+    let samples: [HKCategorySample]
+    do {
+      samples = try await descriptor.result(for: store)
+    } catch {
+      throw Self.mapError(error)
+    }
+
+    return samples.map { sample in
+      SleepSample(
+        id: sample.uuid,
+        start: sample.startDate,
+        end: sample.endDate,
+        stage: Self.sleepStage(sample.value),
+        timeZoneIdentifier: sample.metadata?[HKMetadataKeyTimeZone] as? String,
+        device: Self.deviceName(sample.sourceRevision),
+        wasUserEntered: sample.metadata?[HKMetadataKeyWasUserEntered] as? Bool ?? false)
+    }
+  }
+
+  func biometricSamples(in interval: DateInterval) async throws(HealthSourceError) -> [BiometricSample] {
+    let predicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end, options: .strictStartDate)
+    let descriptor = HKSampleQueryDescriptor(
+      predicates: Self.biometricTypes.map { .quantitySample(type: $0.type, predicate: predicate) },
+      sortDescriptors: [SortDescriptor(\.startDate)])
+
+    let samples: [HKQuantitySample]
+    do {
+      samples = try await descriptor.result(for: store)
+    } catch {
+      throw Self.mapError(error)
+    }
+
+    return samples.compactMap { sample in
+      guard let entry = Self.biometricTypes.first(where: { $0.type == sample.quantityType }) else { return nil }
+      return BiometricSample(
+        kind: entry.kind, date: sample.startDate, value: sample.quantity.doubleValue(for: entry.unit))
+    }
+  }
+
   func enableBackgroundDelivery(for type: HealthDataType) async throws(HealthSourceError) {
     do {
-      try await store.enableBackgroundDelivery(for: Self.quantityType(type), frequency: Self.deliveryFrequency(type))
+      try await store.enableBackgroundDelivery(for: Self.sampleType(type), frequency: Self.deliveryFrequency(type))
     } catch {
       throw Self.mapError(error)
     }
@@ -126,7 +183,7 @@ final class HealthKitSource: HealthSource {
   {
     guard observed.withLock({ $0.insert(type).inserted }) else { return }
     let logger = Self.logger
-    let query = HKObserverQuery(sampleType: Self.quantityType(type), predicate: nil) { _, completionHandler, error in
+    let query = HKObserverQuery(sampleType: Self.sampleType(type), predicate: nil) { _, completionHandler, error in
       let completion = ObserverCompletion(completionHandler)
       if let error {
         logger.error(
@@ -144,18 +201,40 @@ final class HealthKitSource: HealthSource {
 
   // MARK: Mapping
 
-  private static func quantityType(_ type: HealthDataType) -> HKQuantityType {
+  private static func sampleType(_ type: HealthDataType) -> HKSampleType {
     switch type {
     case .heartRate: HKQuantityType(.heartRate)
     case .stepCount: HKQuantityType(.stepCount)
+    case .sleep: HKCategoryType(.sleepAnalysis)
     }
   }
 
-  /// Hourly for both (decision 9). `.immediate` heart rate would relaunch the app in the background
-  /// on every Watch sync of a few samples, many times an hour; iOS caps step count at hourly anyway.
+  /// Hourly for all (decision 9). `.immediate` heart rate would relaunch the app in the background
+  /// on every Watch sync of a few samples, many times an hour; iOS caps step count at hourly anyway,
+  /// and sleep arrives once a day.
   private static func deliveryFrequency(_ type: HealthDataType) -> HKUpdateFrequency {
     switch type {
-    case .heartRate, .stepCount: .hourly
+    case .heartRate, .stepCount, .sleep: .hourly
+    }
+  }
+
+  /// The readings a sleep session's summary is built from, with the unit `BiometricSample.Kind` expects.
+  private static let biometricTypes: [(kind: BiometricSample.Kind, type: HKQuantityType, unit: HKUnit)] = [
+    (.heartRate, HKQuantityType(.heartRate), .count().unitDivided(by: .minute())),
+    (.heartRateVariability, HKQuantityType(.heartRateVariabilitySDNN), .secondUnit(with: .milli)),
+    (.respiratoryRate, HKQuantityType(.respiratoryRate), .count().unitDivided(by: .minute())),
+    (.oxygenSaturation, HKQuantityType(.oxygenSaturation), .percent()),
+  ]
+
+  private static func sleepStage(_ value: Int) -> SleepStage {
+    switch HKCategoryValueSleepAnalysis(rawValue: value) {
+    case .inBed: .inBed
+    case .asleepUnspecified: .asleepUnspecified
+    case .awake: .awake
+    case .asleepCore: .asleepCore
+    case .asleepDeep: .asleepDeep
+    case .asleepREM: .asleepREM
+    default: .unknown
     }
   }
 

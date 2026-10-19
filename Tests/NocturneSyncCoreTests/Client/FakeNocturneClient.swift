@@ -8,6 +8,7 @@ actor FakeNocturneClient: NocturneClient {
   enum Call: Equatable {
     case heartRates([HeartRateRecord])
     case stepCounts([StepCountRecord])
+    case sleepSessions([SleepSessionRecord])
   }
 
   private(set) var calls: [Call] = []
@@ -40,6 +41,17 @@ actor FakeNocturneClient: NocturneClient {
   func uploadStepCounts(_ records: [StepCountRecord]) async throws(NocturneClientError) {
     let index = calls.count
     calls.append(.stepCounts(records))
+    await onCall?(index)
+    try answer()
+  }
+
+  var sleepBatches: [[SleepSessionRecord]] {
+    calls.compactMap { if case .sleepSessions(let records) = $0 { records } else { nil } }
+  }
+
+  func uploadSleepSessions(_ records: [SleepSessionRecord]) async throws(NocturneClientError) {
+    let index = calls.count
+    calls.append(.sleepSessions(records))
     await onCall?(index)
     try answer()
   }

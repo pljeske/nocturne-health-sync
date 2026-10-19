@@ -19,7 +19,7 @@ struct SignInView: View {
         Text("Nocturne instance")
       } footer: {
         Text(
-          "NocturneSync uploads heart rate and step count from Apple Health to this instance. It only reads Health and never writes to it."
+          "NocturneSync uploads heart rate, step count and sleep from Apple Health to this instance. It only reads Health and never writes to it."
         )
       }
       Section {

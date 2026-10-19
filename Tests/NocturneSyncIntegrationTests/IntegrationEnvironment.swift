@@ -51,14 +51,30 @@ enum IntegrationEnvironment {
   static func fetch<Record: Decodable>(
     _ type: Record.Type, path: String, around date: Date, token: String
   ) async throws -> [Record] {
+    try await get(
+      [Record].self, path: path, around: date, extra: [URLQueryItem(name: "count", value: "100000")], token: token)
+  }
+
+  /// `GET api/v4/sleep/sessions?from=&to=&limit=` with a bearer token; the `data` page of the response.
+  static func fetchSleepSessions(around date: Date, token: String) async throws -> [StoredSleepSession] {
+    struct Page: Decodable { let data: [StoredSleepSession] }
+    return try await get(
+      Page.self, path: "api/v4/sleep/sessions", around: date, extra: [URLQueryItem(name: "limit", value: "1000")],
+      token: token
+    ).data
+  }
+
+  private static func get<Response: Decodable>(
+    _ type: Response.Type, path: String, around date: Date, extra: [URLQueryItem], token: String
+  ) async throws -> Response {
     var components = URLComponents(url: try requireBaseURL().appending(path: path), resolvingAgainstBaseURL: false)!
     // A day either side absorbs a server that binds `Z` timestamps to its local time zone.
     let style = Date.ISO8601FormatStyle()
-    components.queryItems = [
-      URLQueryItem(name: "from", value: date.addingTimeInterval(-86_400).formatted(style)),
-      URLQueryItem(name: "to", value: date.addingTimeInterval(86_400).formatted(style)),
-      URLQueryItem(name: "count", value: "100000"),
-    ]
+    components.queryItems =
+      [
+        URLQueryItem(name: "from", value: date.addingTimeInterval(-86_400).formatted(style)),
+        URLQueryItem(name: "to", value: date.addingTimeInterval(86_400).formatted(style)),
+      ] + extra
     var request = URLRequest(url: components.url!)
     request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -66,8 +82,25 @@ enum IntegrationEnvironment {
     guard response.statusCode == 200 else {
       throw Failure(description: "GET \(path) returned HTTP \(response.statusCode)")
     }
-    return try JSONDecoder().decode([Record].self, from: data)
+    return try JSONDecoder().decode(Response.self, from: data)
   }
+}
+
+/// The fields of Nocturne's `SleepSession` read model this suite checks. The list endpoint omits stages.
+struct StoredSleepSession: Decodable {
+  let originalId: String?
+  let source: String
+  let type: String
+  let startMills: Int
+  let endMills: Int
+  let totalSleepMs: Int
+  let avgHeartRate: Double?
+  let minHeartRate: Double?
+  let avgHrv: Double?
+  let avgBreathRate: Double?
+  let avgSpo2: Double?
+  let sourceApp: String?
+  let sourceDevice: String?
 }
 
 /// Adds a fixed bearer token; the app uses `AuthenticatedTransport` with OAuth instead.

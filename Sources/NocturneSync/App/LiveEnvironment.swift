@@ -46,9 +46,13 @@ enum LiveEnvironment {
             client: client,
             anchors: FileAnchorStore(directory: directory),
             stateStore: FileSyncStateStore(directory: directory),
-            // Steps first: the cheap pipeline finishes before the long heart rate backfill, which a
-            // background time limit may cut short.
-            pipelines: [StepsPipeline(device: NocturneConstants.stepDevice), HeartRatePipeline()],
+            // Steps and sleep first: the cheap pipelines finish before the long heart rate backfill,
+            // which a background time limit may cut short.
+            pipelines: [
+              StepsPipeline(device: NocturneConstants.mergedDevice),
+              SleepPipeline(device: NocturneConstants.mergedDevice),
+              HeartRatePipeline(),
+            ],
             app: app)
           return InstanceServices(auth: session, sync: engine)
         }))

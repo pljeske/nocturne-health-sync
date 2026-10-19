@@ -15,10 +15,13 @@ import Testing
         lastError: .init(
           message: "Bulk operations are limited to 1000 step count records per request", occurredAt: now),
         uploadedCount: 7),
+      sleep: .init(lastSuccessfulSync: now, uploadedCount: 3),
       stepBackfillCompletedThrough: now.addingTimeInterval(-86400),
       heartRateBackfillComplete: true,
       heartRateBackfillStart: now.addingTimeInterval(-90 * 86400),
-      stepLookbackSent: ["steps-1719828000-300": 42])
+      stepLookbackSent: ["steps-1719828000-300": 42],
+      sleepBackfillCompletedThrough: now.addingTimeInterval(-2 * 86400),
+      sleepLookbackSent: ["sleep-2024-07-02-0": "4f1a3c"])
   }
 
   @Test func missingFileIsTheDefaultState() throws {
@@ -29,6 +32,9 @@ import Testing
     #expect(state.heartRate.uploadedCount == 0)
     #expect(state.stepBackfillCompletedThrough == nil)
     #expect(state.stepLookbackSent.isEmpty)
+    #expect(state.sleep == SyncState.TypeStatus())
+    #expect(state.sleepBackfillCompletedThrough == nil)
+    #expect(state.sleepLookbackSent.isEmpty)
     #expect(!state.heartRateBackfillComplete)
   }
 
@@ -61,6 +67,14 @@ import Testing
         },
         "heartRateBackfillComplete" : true,
         "heartRateBackfillStart" : "2024-04-04T09:46:40Z",
+        "sleep" : {
+          "lastSuccessfulSync" : "2024-07-03T09:46:40Z",
+          "uploadedCount" : 3
+        },
+        "sleepBackfillCompletedThrough" : "2024-07-01T09:46:40Z",
+        "sleepLookbackSent" : {
+          "sleep-2024-07-02-0" : "4f1a3c"
+        },
         "stepBackfillCompletedThrough" : "2024-07-02T09:46:40Z",
         "stepCount" : {
           "lastError" : {
@@ -127,6 +141,8 @@ import Testing
     #expect(state.heartRate.uploadedCount == 1)
     #expect(state.stepCount.lastError == nil)
     #expect(state.stepBackfillCompletedThrough == nil)
+    #expect(state.sleep == SyncState.TypeStatus())
+    #expect(state.sleepLookbackSent.isEmpty)
   }
 
   @Test func subscriptAddressesTypes() {

@@ -4,7 +4,7 @@ import Foundation
 /// the base URL.
 public struct OAuthConfiguration: Sendable, Hashable {
   /// Scopes the upload endpoints require. Nothing broader is ever requested.
-  public static let requiredScopes = ["heartrate.readwrite", "stepcount.readwrite"]
+  public static let requiredScopes = ["heartrate.readwrite", "stepcount.readwrite", "sleep.readwrite"]
 
   /// Dynamic registration is idempotent per `(tenant, software_id)`; this is the bundle id.
   public var softwareID: String

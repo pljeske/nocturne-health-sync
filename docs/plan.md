@@ -206,6 +206,40 @@ Views in the iOS target bind to `AppModel`; status rows (`DataTypeStatus`), addr
 - README: install, sign in, what "verified on device" means, known gaps (deletions both
   directions, zeroed buckets).
 
+### 11. Sleep pipeline (`Domain/SleepSessions.swift`, `Engine/SleepPipeline.swift`)
+
+Added 2026-10-19 on request (decisions 10 to 13 in `CLAUDE.md`).
+
+- `SleepSample`/`SleepStage` mirror `sleepAnalysis` category samples; `SleepSessionRecord` mirrors
+  Nocturne's `SleepSession` with stage intervals. `SleepDays` does the local-noon day arithmetic;
+  `SleepSessionBuilder` groups samples of every source by a 1 h gap, names sessions
+  `sleep-<day>-<n>`, and picks the day's longest as the overnight sleep.
+- `SleepPipeline` mirrors the steps pipeline: a lookback window (current sleep day plus two) sent
+  only when a session's content digest changed, then a day-at-a-time backfill with a committed
+  watermark. Windows are read with a 24 h margin on both sides so sessions are grouped whole.
+- `HTTPNocturneClient.uploadSleepSessions` posts `api/v4/sleep/sessions/bulk` in chunks of 20.
+- `HealthKitSource.sleepSamples(overlapping:)` is an `HKSampleQueryDescriptor` over the category
+  type; background delivery and the observer use the same `.hourly` registration as the other types.
+- Tests: day boundaries across both US DST transitions, grouping and naming, totals, digest
+  stability, lookback change detection, renumbering when a nap appears late, watermark commit only
+  on success, cancellation, deferral while locked, and the request JSON golden.
+
+### 12. Sleep biometrics (`Domain/SleepBiometrics.swift`)
+
+Added 2026-10-19 on request (decision 14 in `CLAUDE.md`).
+
+- `BiometricSample` carries heart rate, HRV (SDNN, ms), respiratory rate and SpO2 (fraction) readings
+  in Health's units. `SleepBiometrics.summarize` keeps readings that start in an asleep stage
+  interval, converts SpO2 to percent, skips impossible values, and rounds to 0.1.
+- `HealthSource.biometricSamples(in:)` is queried once per session with an asleep interval, over the
+  session's span; `HealthKitSource` uses one `HKSampleQueryDescriptor` over the four quantity types.
+- The summary is part of `SleepSessionRecord.contentDigest`, so late readings re-send the session in
+  the lookback. The request body adds `avgHeartRate`, `minHeartRate`, `avgHrv`, `avgBreathRate`,
+  `avgSpo2`, omitted when nil.
+- Tests: averaging and minimum, asleep-only filtering, overlap counted once, unit conversion, skipped
+  readings, digest change, late reading re-send, no query for in-bed-only sessions, deferral while
+  locked, wire fields.
+
 ## Cross-cutting rules applied in every step
 
 - `swift format` before commit. Swift Testing only. `os.Logger` with subsystem per module,
