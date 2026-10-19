@@ -117,8 +117,9 @@ before any engine runs). Anchors and sync state live in a directory per instance
 
 ## HealthKit rules
 
-- Request read authorization only. `NSHealthShareUsageDescription` in Info.plist; no
-  `NSHealthUpdateUsageDescription`. HealthKit does not reveal whether read access was denied;
+- Request read authorization only (`toShare: []`). `NSHealthShareUsageDescription` in Info.plist, plus
+  an `NSHealthUpdateUsageDescription` stating that nothing is written: App Store Connect rejects the
+  upload without it because the binary references `requestAuthorization(toShare:read:)`. HealthKit does not reveal whether read access was denied;
   an empty result is not an error. Surface "no data seen yet" in the UI instead of guessing.
 - Entitlements: HealthKit, plus `com.apple.developer.healthkit.background-delivery`.
 - Register an `HKObserverQuery` per type and call `enableBackgroundDelivery` at every launch
